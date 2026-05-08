@@ -207,6 +207,38 @@ app.delete('/api/categories/:name', async (req, res) => {
 });
 
 // ===== LOGS =====
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const resolvedName = userId ? (validUsers[userId] || userId) : null;
+    
+    console.log(`📋 Fetching logs for userId: ${userId} (Resolved Name: ${resolvedName})`);
+
+    let logs = [];
+    if (useSheets) {
+      logs = await gsheets.getLogs();
+    } else {
+      logs = localLogs;
+    }
+
+    if (userId) {
+      const filteredLogs = logs.filter(log => {
+        const logUser = String(log.userId || '').trim().toUpperCase();
+        const targetId = String(userId).trim().toUpperCase();
+        const targetName = String(resolvedName || '').trim().toUpperCase();
+        
+        return logUser === targetId || logUser === targetName;
+      });
+      console.log(`✅ Filtered ${logs.length} logs down to ${filteredLogs.length} for ${userId}`);
+      return res.json(filteredLogs);
+    }
+    
+    res.json(logs);
+  } catch (err) {
+    console.error('GET /api/logs error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ===== DIAGNOSTICS =====
 app.get('/api/debug', async (req, res) => {
