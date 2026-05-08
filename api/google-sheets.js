@@ -82,30 +82,44 @@ export async function initializeSheet(initialFaqs = []) {
     // 2. Check FAQ_Data headers
     const faqRes = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${FAQ_SHEET}!A1:A1`,
+      range: `${FAQ_SHEET}!A1:J1`,
     });
 
     if (!faqRes.data.values || faqRes.data.values.length === 0) {
       console.log('📄 Initializing FAQ_Data headers...');
       await client.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${FAQ_SHEET}!A1:I1`,
+        range: `${FAQ_SHEET}!A1:J1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [['ID', 'Category', 'Question', 'Answer', 'Date', 'Reporter', 'Merchant', 'CreatedAt', 'UpdatedAt']],
+          values: [['ID', 'Category', 'Question', 'Answer', 'Date', 'Reporter', 'Merchant', 'CreatedAt', 'UpdatedAt', 'LastEditor']],
         },
       });
 
       if (initialFaqs.length > 0) {
         console.log(`📤 Uploading ${initialFaqs.length} initial FAQs to Google Sheets...`);
         const values = initialFaqs.map(f => [
-          f.id, f.category, f.question, f.answer, f.date, f.reporter, f.merchant, new Date().toISOString(), new Date().toISOString()
+          f.id, f.category, f.question, f.answer, f.date, f.reporter, f.merchant, new Date().toISOString(), new Date().toISOString(), ''
         ]);
         await client.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
           range: `${FAQ_SHEET}!A2`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values },
+        });
+      }
+    } else {
+      // Ensure the header includes LastEditor if it's missing (for existing sheets)
+      const currentHeaders = faqRes.data.values[0] || [];
+      if (currentHeaders.length < 10 || !currentHeaders.includes('LastEditor')) {
+        console.log('🔧 Updating FAQ_Data headers to include LastEditor...');
+        await client.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${FAQ_SHEET}!A1:J1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [['ID', 'Category', 'Question', 'Answer', 'Date', 'Reporter', 'Merchant', 'CreatedAt', 'UpdatedAt', 'LastEditor']],
+          },
         });
       }
     }
@@ -181,7 +195,7 @@ export async function getFAQs() {
   const client = await getSheetsClient();
   const res = await client.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${FAQ_SHEET}!A2:I`,
+    range: `${FAQ_SHEET}!A2:J`,
   });
   const rows = res.data.values || [];
   return rows.map(row => ({
@@ -194,6 +208,7 @@ export async function getFAQs() {
     merchant: row[6] || '',
     createdAt: row[7] || '',
     updatedAt: row[8] || '',
+    lastEditor: row[9] || '',
   }));
 }
 
@@ -205,7 +220,7 @@ export async function addFAQ(faq, reporterName) {
 
   await client.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${FAQ_SHEET}!A:I`,
+    range: `${FAQ_SHEET}!A:J`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [[
@@ -218,47 +233,77 @@ export async function addFAQ(faq, reporterName) {
         faq.merchant || '',
         now,
         now,
+        '',
       ]],
     },
   });
 
-  return { id, ...faq, date, reporter: reporterName || faq.reporter, createdAt: now, updatedAt: now };
+  return { id, ...faq, date, reporter: reporterName || faq.reporter, createdAt: now, updatedAt: now, lastEditor: '' };
 }
 
-export async function updateFAQ(targetId, faq) {
+export async function updateFAQ(targetId, faq, editorName) {
   const client = await getSheetsClient();
-  // Find the row with matching ID
+  // Find the row with matching ID and get current data to preserve metadata
   const res = await client.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${FAQ_SHEET}!A:A`,
+    range: `${FAQ_SHEET}!A:J`,
   });
   const rows = res.data.values || [];
   let rowIndex = -1;
+  let existingData = {};
+  
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i][0] === targetId) { rowIndex = i + 1; break; }
+    if (rows[i][0] === targetId) { 
+      rowIndex = i + 1; 
+      existingData = {
+        category: rows[i][1],
+        question: rows[i][2],
+        answer: rows[i][3],
+        date: rows[i][4],
+        reporter: rows[i][5],
+        merchant: rows[i][6],
+        createdAt: rows[i][7],
+        updatedAt: rows[i][8],
+        lastEditor: rows[i][9]
+      };
+      break; 
+    }
   }
   if (rowIndex === -1) throw new Error('FAQ not found');
 
   const now = new Date().toISOString();
+  console.log(`📝 Updating FAQ ${targetId} at row ${rowIndex}. Editor: ${editorName}`);
+  
+  const updatedData = [
+    faq.category || existingData.category || 'General',
+    faq.question || existingData.question,
+    faq.answer || existingData.answer,
+    faq.date || existingData.date || '',
+    faq.reporter || existingData.reporter || '',
+    faq.merchant || existingData.merchant || '',
+    existingData.createdAt || '',
+    now,
+    editorName || '',
+  ];
+
   await client.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${FAQ_SHEET}!B${rowIndex}:I${rowIndex}`,
+    range: `${FAQ_SHEET}!B${rowIndex}:J${rowIndex}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [[
-        faq.category || 'General',
-        faq.question,
-        faq.answer,
-        faq.date || '',
-        faq.reporter || '',
-        faq.merchant || '',
-        '',
-        now,
-      ]],
+      values: [updatedData],
     },
   });
 
-  return { id: targetId, ...faq, updatedAt: now };
+  return { 
+    id: targetId, 
+    ...faq, 
+    date: faq.date || existingData.date,
+    reporter: faq.reporter || existingData.reporter,
+    createdAt: existingData.createdAt, 
+    updatedAt: now, 
+    lastEditor: editorName || '' 
+  };
 }
 
 export async function deleteFAQ(targetId, deletedByName) {

@@ -119,19 +119,28 @@ app.put('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { userId, ...faqData } = req.body;
+    const userName = validUsers[userId] || userId;
+
     if (useSheets) {
-      const updated = await gsheets.updateFAQ(id, faqData);
-      await gsheets.addLog({ userId, action: 'EDIT', targetId: id, details: `Edited FAQ: "${faqData.question}"` });
+      const updated = await gsheets.updateFAQ(id, faqData, userName);
+      await gsheets.addLog({ userId: userName, action: 'EDIT', targetId: id, details: `Edited FAQ: "${faqData.question}"` });
       return res.json(updated);
     }
     // Local fallback
     const idx = localFaqs.findIndex(f => f.id === id);
     if (idx === -1) return res.status(404).json({ error: 'FAQ not found' });
     const oldQ = localFaqs[idx].question;
-    localFaqs[idx] = { ...localFaqs[idx], ...faqData };
-    const userName = validUsers[userId] || userId;
+    const now = new Date().toISOString();
+    
+    localFaqs[idx] = { 
+      ...localFaqs[idx], 
+      ...faqData, 
+      lastEditor: userName,
+      updatedAt: now 
+    };
+
     localLogs.unshift({
-      timestamp: new Date().toISOString(), userId: userName, action: 'EDIT',
+      timestamp: now, userId: userName, action: 'EDIT',
       targetId: id, details: `Edited FAQ: "${oldQ}"`,
     });
     res.json(localFaqs[idx]);

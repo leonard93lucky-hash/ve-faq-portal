@@ -54,6 +54,21 @@ export default function FAQDashboard({
     setOpenFaqId(openFaqId === id ? null : id);
   };
 
+  const formatEditTime = (ts) => {
+    if (!ts) return '';
+    try {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch { return ''; }
+  };
+
   return (
     <div className="dashboard-container animate-fade-in">
       {/* Top Bar */}
@@ -176,6 +191,12 @@ export default function FAQDashboard({
                   <span className="faq-meta-item">📅 {faq.date}</span>
                   <span className="faq-meta-item">👤 {faq.reporter}</span>
                   {faq.merchant && <span className="faq-meta-item">🏢 {faq.merchant}</span>}
+                  {faq.lastEditor && (
+                    <span className="faq-meta-item" style={{ width: '100%', marginTop: '0.25rem', color: 'var(--primary)', opacity: 0.8, fontSize: '0.75rem' }}>
+                      <FiEdit2 style={{ fontSize: '0.7rem', marginRight: '0.3rem' }} /> 
+                      Last edited by {faq.lastEditor} on {formatEditTime(faq.updatedAt)}
+                    </span>
+                  )}
                 </div>
                 <div className="faq-actions">
                   <button
