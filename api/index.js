@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 // ===== User Registry =====
-const USERS_FILE = path.join(__dirname, 'src', 'users.json');
+const USERS_FILE = path.join(__dirname, '..', 'src', 'users.json');
 let validUsers = {};
 try {
   validUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
@@ -26,7 +26,7 @@ try {
 // ===== In-memory fallback (when Google Sheets not configured) =====
 let localFaqs = [];
 let localLogs = [];
-const DATA_FILE = path.join(__dirname, 'src', 'faq-data.json');
+const DATA_FILE = path.join(__dirname, '..', 'src', 'faq-data.json');
 
 function loadLocalData() {
   try {
