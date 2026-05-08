@@ -37,10 +37,23 @@ loadLocalData();
 
 const useSheets = gsheets.isConfigured();
 if (useSheets) {
-  console.log('✅ Google Sheets configured — using Sheets backend');
-  gsheets.initializeSheet(localFaqs).then(() => {
-    console.log('✨ Google Sheets sync complete');
-  });
+  console.log('✅ Google Sheets configured — attempting synchronization...');
+  
+  // Set a timeout for the initial connection to alert the user if it hangs
+  const initTimeout = setTimeout(() => {
+    console.error('❌ TIMEOUT: Google Sheets synchronization is taking too long (> 10s).');
+    console.error('   This usually means the GOOGLE_PRIVATE_KEY is invalid or the Sheet ID is inaccessible.');
+  }, 10000);
+
+  gsheets.initializeSheet(localFaqs)
+    .then(() => {
+      clearTimeout(initTimeout);
+      console.log('✨ Google Sheets sync complete');
+    })
+    .catch(err => {
+      clearTimeout(initTimeout);
+      console.error('❌ Google Sheets Initialization Failed:', err.message);
+    });
 } else {
   console.log('⚠️  Google Sheets NOT configured — using local JSON fallback');
 }
@@ -194,36 +207,15 @@ app.delete('/api/categories/:name', async (req, res) => {
 });
 
 // ===== LOGS =====
-app.get('/api/logs', async (req, res) => {
+
+// ===== DIAGNOSTICS =====
+app.get('/api/debug', async (req, res) => {
   try {
-    const { userId } = req.query;
-    const resolvedName = userId ? (validUsers[userId] || userId) : null;
-    
-    console.log(`📋 Fetching logs for userId: ${userId} (Resolved Name: ${resolvedName})`);
-
-    let logs = [];
-    if (useSheets) {
-      logs = await gsheets.getLogs();
-    } else {
-      logs = localLogs;
-    }
-
-    if (userId) {
-      const filteredLogs = logs.filter(log => {
-        const logUser = String(log.userId || '').trim().toUpperCase();
-        const targetId = String(userId).trim().toUpperCase();
-        const targetName = String(resolvedName || '').trim().toUpperCase();
-        
-        return logUser === targetId || logUser === targetName;
-      });
-      console.log(`✅ Filtered ${logs.length} logs down to ${filteredLogs.length} for ${userId}`);
-      return res.json(filteredLogs);
-    }
-    
-    res.json(logs);
+    console.log('🔍 Running diagnostics...');
+    const report = await gsheets.testConnection();
+    res.json(report);
   } catch (err) {
-    console.error('GET /api/logs error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
   }
 });
 

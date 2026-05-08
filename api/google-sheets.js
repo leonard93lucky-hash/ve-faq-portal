@@ -12,20 +12,37 @@ const CATEGORIES_SHEET = 'Categories';
 let sheets = null;
 
 function getAuth() {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!email || !privateKey) {
+    console.warn('⚠️ Missing Google Credentials:', { 
+      email: !!email, 
+      privateKey: !!privateKey 
+    });
     return null;
   }
+
+  // Robust parsing for Vercel:
+  // 1. Remove literal quotes if the user pasted it with them
+  // 2. Fix double-escaped newlines (\\n -> \n)
+  privateKey = privateKey.trim();
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.substring(1, privateKey.length - 1);
+  }
+  privateKey = privateKey.replace(/\\n/g, '\n');
+
   try {
     const auth = new google.auth.GoogleAuth({
       credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        client_email: email,
+        private_key: privateKey,
       },
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     return auth;
   } catch (err) {
-    console.error('Google Auth Error:', err.message);
+    console.error('❌ Google Auth Error (Construction):', err.message);
     return null;
   }
 }
@@ -398,8 +415,71 @@ export async function addLog(log) {
 }
 
 export function isConfigured() {
-  return !!(process.env.GOOGLE_SHEETS_ID &&
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-    process.env.GOOGLE_PRIVATE_KEY &&
-    !process.env.GOOGLE_SHEETS_ID.includes('your_'));
+  const hasId = !!process.env.GOOGLE_SHEETS_ID && !process.env.GOOGLE_SHEETS_ID.includes('your_');
+  const hasEmail = !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const hasKey = !!process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!hasId || !hasEmail || !hasKey) {
+    console.log('ℹ️ Google Sheets Config Check:', { hasId, hasEmail, hasKey });
+  }
+
+  return hasId && hasEmail && hasKey;
+}
+
+/**
+ * Attempts to connect to Google Sheets with a timeout.
+ * Returns a diagnostic report.
+ */
+export async function testConnection() {
+  const report = {
+    timestamp: new Date().toISOString(),
+    config: {
+      hasId: !!process.env.GOOGLE_SHEETS_ID,
+      hasEmail: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      hasKey: !!process.env.GOOGLE_PRIVATE_KEY,
+    },
+    auth: { status: 'pending' },
+    connectivity: { status: 'pending' }
+  };
+
+  if (!isConfigured()) {
+    report.status = 'error';
+    report.message = 'Environment variables are missing or incorrectly configured.';
+    return report;
+  }
+
+  // 1. Try Auth
+  const auth = getAuth();
+  if (!auth) {
+    report.auth.status = 'error';
+    report.auth.message = 'Failed to construct Google Auth client. Check private key format.';
+    report.status = 'error';
+    return report;
+  }
+  report.auth.status = 'ok';
+
+  // 2. Try Connectivity (with timeout)
+  try {
+    const client = await getSheetsClient();
+    
+    // Wrap the metadata call in a timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Connection timed out after 5s')), 5000)
+    );
+    
+    const fetchPromise = client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    
+    await Promise.race([fetchPromise, timeoutPromise]);
+    
+    report.connectivity.status = 'ok';
+    report.status = 'ok';
+    report.message = 'Successfully connected to Google Sheets.';
+  } catch (err) {
+    report.connectivity.status = 'error';
+    report.connectivity.message = err.message;
+    report.status = 'error';
+    report.message = `Connectivity check failed: ${err.message}`;
+  }
+
+  return report;
 }

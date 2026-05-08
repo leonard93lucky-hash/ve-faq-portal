@@ -2,7 +2,8 @@
 import initialFaqData from './faq-data.json';
 import usersData from './users.json';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const isProd = import.meta.env.PROD;
+const API_URL = import.meta.env.VITE_API_URL || (isProd ? '/api' : 'http://localhost:3001/api');
 
 let mockFaqs = [...initialFaqData];
 let mockLogs = [];
