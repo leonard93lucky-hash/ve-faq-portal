@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   FiSearch, FiPlus, FiChevronDown, FiEdit2, FiTrash2,
-  FiClock, FiLogOut, FiUser, FiFilter, FiX
+  FiClock, FiLogOut, FiUser, FiFilter, FiX, FiRefreshCw
 } from 'react-icons/fi';
 
 // Default category list as fallback
@@ -31,6 +31,8 @@ export default function FAQDashboard({
   onShowLogs,
   onLogout,
   logCount,
+  onRefresh,
+  isLoading,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -70,6 +72,15 @@ export default function FAQDashboard({
             <FiClock />
             <span>Activity Log</span>
             {logCount > 0 && <span className="log-badge-count">{logCount}</span>}
+          </button>
+          <button 
+            className="icon-btn" 
+            onClick={onRefresh} 
+            disabled={isLoading}
+            title="Refresh Data"
+            id="refresh-data-btn"
+          >
+            <FiRefreshCw className={isLoading ? 'spin' : ''} />
           </button>
           <div className="user-pill">
             <FiUser />

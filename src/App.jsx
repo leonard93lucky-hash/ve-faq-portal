@@ -164,6 +164,8 @@ function App() {
         onShowLogs={() => setIsLogOpen(true)}
         onLogout={handleLogout}
         logCount={logs.length}
+        onRefresh={loadData}
+        isLoading={loading}
       />
 
       <FAQModal
