@@ -1,0 +1,215 @@
+Category;Question;Answer;Date;Reporter;Merchant;Additional Info 
+General;Rps of privy API general;"Esign 70 rps
+Registration 40 rps
+Dwh glacier 10 rps
+Shared data 81 rps";1 oct 2025;Sungguh;ask by SEA and answered by xxx;
+Policies & Compliance;can merchant privy id use autosign?;yes can, if the privyid verification is level 2 or more, but if privyid level is 1 than need to reverify.;8 oct 2025;Lucky;;
+Policies & Compliance;how long document is saved? and in Indonesia up to 12 years criminal can be charge, so can documents stay for 12 years?;document saved for 5 years, and the rest of document saved in archive forever.;10 oct 2025;Lucky;Pt Farika Beton;
+Policies & Compliance;what happen if privy is closed? how is the data saving?;"if Privy terminates its services, we will:
+Notify all relevant parties (Root CA, clients, users, etc)
+Keep cert status information to be accessible for 2 years after termination
+Complete all certificate revocations and ensure any disruption is minimized
+Archive all PKI-related records (like CRL, logs, audit data) for at least 5 years
+Privy implements cryptographic protection for both communication and database storage using FIPS (Federal Information Processing Standards) validated modules, ensuring encryption for data in transit and at rest.";10 oct 2025;Lucky;Pt Farika Beton;
+Policies & Compliance;what if privy got hacked?;"Privy maintains an incident handling and Disaster Recovery Plan (DRP). If an incident occurs, we will:
+Immediately investigates and takes containment measures
+Notifies the Root CA if a compromise, system disruption, or unavailability occurs
+Restores operations and, if necessary, revokes and reissues affected certificates
+Performs regular penetration, load, and stress testing to prevent and detect attacks";10 oct 2025;Lucky;Pt Farika Beton;
+Policies & Compliance;what if someone in internal abuse the system to sign?;"all signing actions require authenticated access by the signer
+signer key activation must be done by the user themselves
+authentication and access are controlled through trusted channels (for API, we require OTP that Privy will send to the end user, and Privy will require the confirmation letter and specific agreement for autosign feature)
+transaction / document are locked after repeated failed login attempts";10 oct 2025;Lucky;Pt Farika Beton;
+Technical Details;IF pdf contain viruses, what will happen to privy system?;Privy implements protection against malicious code and uses cryptographic controls for both communication sessions and database security. Before entering our system, we will check if there are any suspicious metadata on the PDF as part of validation. our system also supported by access management and audit logging. ;10 oct 2025;Lucky;Pt Farika Beton;
+Technical Details;server security fault tolerance level berapa? karena server offline;"Privy operates a Data Center (DC) and a separate Recovery Data Center (DRC), both located in Indonesia.
+Both facilities have physical and logical safeguards, flood-free siting, fire protection, and 24-hour security
+PKI systems are mirrored between sites and must be restored within 24 hours after a disaster
+Backup and recovery systems are tested at least once per year";10 oct 2025;Lucky;Pt Farika Beton;"Saat ini infrastruktur server di Privy memiliki fault tolerance level pada kategori High Availability (HA), yang secara umum dikategorikan sebagai Tier III dan Tier IV equivalent berdasarkan praktik industri.
+Server-server utama kami telah menerapkan redundansi penuh di level:
+Compute: cluster virtualization dengan kemampuan failover otomatis (VMware HA Cluster).
+Storage: redundancy RAID dan dual-controller SAN/NAS dengan multipath I/O.
+Power & Cooling: dual power source (A+B feed) dan precision cooling dengan failover.
+Network: dual uplink dan path redundant di setiap rack.
+Dengan konfigurasi tersebut, sistem dapat menyediakan uptime di atas 99,997% per tahun, sesuai benchmark Uptime Institute Tier III/IV Data Center Design.
+Untuk lapisan software, diterapkan VM-level HA + snapshot recovery dan offsite replication.
+Dari sisi security, sistem juga dilindungi oleh multi-layer defense: firewall, PAM, endpoint protection, serta monitoring berkelanjutan.
+Fault tolerance diverifikasi secara berkala melalui BCP/DR test sesuai dengan pedoman ISO 27001 Annex A.17 – Information Security Continuity."
+General;signing x,y based on what?;based on pixel;10 oct 2025;Lucky;Pt Farika Beton;
+General;Success rate e-meterai berapa %?;ini tergantung peruri cuman dari Peruri juga ada menunjuk 7 perusahaan sebagai Distributor resmi e-Meterai privy integrasi kepada beberapa distributor resmi, dan dari sisi privy ada system auto-retry jita terjadi kegagalan dan juga sistem monitoring, selama ini aman hingga ada 1 juta materai sebulan.;10 oct 2025;Lucky;Jamkrindo;
+Digital-ID;[DigitalID] what will happen if the user's system is below version provided in the document? IOS 14 and Android 7?;the app privy will not responding on the mobile app;13 oct 2025;Lucky;Singa;
+Digital-ID;"[DigitaliD] If the Privy app is not installed on the user's phone, where will the page redirect to after tapping the button ""Open Privy App?"" app download page?";it will be redirect to play store or apps store for download the Privy Application;13 oct 2025;Lucky;Singa;
+Digital-ID;"[DigitalID] if users select ""Reject the request"" or the link is expired, what will happen? Back to our app and show error toast?";if reject user will redirect to merchant apps, if expired then user will not redirect stay on privy app, and we will provide callback to merchant, but user can go back to merchant app by switch app.;13 oct 2025;Lucky;Singa;
+Digital-ID;[DigitalID] New user that dont have privy ID need to proceed identity verification process separately before using this method, and the meaning of separately are?;Separately means, the user must download Privy applications first on their mobile phone, register, and login to Privy Apps (if user still don't have it). Then after that, this digitalID featured can work on merchant application;13 oct 2025;Lucky;Singa;
+Digital-ID;[DigitalID] get shared data on the API, What does '5 times' mean? Is each user allowed to query 5 times? what will happen to users if more than 5 times?;"5 times mean, merchant can hit the ""Get Shared Data"" API 5 times with the same user token. The user token will be obtained after the user has approved to share their data on the Privy application. but case like hitting ""Get Shared Data"" API >5 times less likely to happen and usually done within first hit. and 5 times is configurable, can be add more.";13 oct 2025;Lucky;Singa;
+Digital-ID;[DigitalID] How many character on the user_token from callback? is there any standard or maximum?;we use JWT for the token, so there is no standard on character and maximum character, is also possible if we give 1000 char;13 oct 2025;Sungguh;Cicil;
+General;[Glacier] What's the allowed symbol for name parameter;"comma (,)
+period (.)
+apostrophe (')";20 Oct 2025;Sungguh;CBI;
+General;When the notification of expired Electronic Certificate will be send to user's email?;"- First notification : 40 days before
+- Fecond notification : 15 days before
+- Third notification : 3 days before";20 Oct 2025;Olla;;
+Technical Details;authoritative partner will be conducting scheduled maintenance, what is the error code?;if the authoritative partner happen to be maintenance or there is an issue on their side, it will impact the User Verification (eCert) API, the the error code would be ??400 - access timeout??;24 Oct 2025;Sungguh;Sea Group;
+Technical Details;If Privy maintenance, what is the error code?;Regarding Privy’s maintenance for eSign the code will be ??504??;24 Oct 2025;Sungguh;Sea Group;
+Liveness SDK;[Liveness] Deepfake prevention efforts and what tools are used for liveness?;"Pencegahan Deepfake dan Keamanan Face Verification
+Untuk mencegah upaya deepfake atau pemalsuan identitas melalui wajah, sistem kami menerapkan berbagai lapisan keamanan yang saling melengkapi, mencakup aspek teknologi, data, dan analitik adaptif.
+Liveness Detection dengan Teknologi RASP
+Sistem liveness terbaru kami memanfaatkan teknologi RASP (Runtime Application Self-Protection) untuk memastikan proses verifikasi dilakukan oleh individu yang benar-benar hadir secara langsung — bukan hasil video, foto, atau manipulasi digital.
+Selain itu, RASP juga terhubung dengan pusat data internal kami yang menyimpan informasi seperti ID perangkat dari ribuan merchant yang telah diverifikasi oleh Privy, serta pola aktivitas mencurigakan seperti emulator detection, IP breach dan lainya.
+Hal ini memungkinkan sistem untuk secara proaktif mengenali dan memblokir potensi fraudster sejak awal proses verifikasi.
+Machine Learning untuk Liveness Detection
+Kami menggunakan model machine learning untuk menganalisis hasil verifikasi wajah dan mendeteksi pola atau perilaku yang tidak wajar. Model ini terus belajar dari data historis dan kasus fraud sebelumnya agar dapat mengidentifikasi potensi kecurangan secara adaptif dan real-time.
+HMAC Signature & Payload Encryption
+Setiap permintaan verifikasi dilindungi dengan HMAC signature dan payload encryption untuk menjaga integritas data serta mencegah manipulasi atau penyalahgunaan selama proses komunikasi antara perangkat dan server.
+Deteksi Emulator melalui Sensor Perangkat (Accelerometer & Gyroscope)
+Sistem kami juga mampu mendeteksi penggunaan emulator atau perangkat virtual dengan menganalisis data dari sensor accelerometer dan gyroscope.
+Karena proses face verification dilakukan menggunakan ponsel fisik, perangkat akan memperlihatkan pola gerakan alami seperti getaran, perubahan orientasi, atau pergeseran kecil saat pengguna memegang ponsel. Emulator tidak memiliki sensor ini atau tidak menghasilkan pola gerakan realistis, sehingga dapat dengan mudah diidentifikasi dan diblokir.
+Pemantauan dan Pembaruan Model Secara Berkala
+Sistem kami dipantau dan diperbarui secara berkala dengan pola-pola kecurangan terbaru dan teknik serangan baru yang berkembang di industri. Pendekatan ini memastikan model dan mekanisme deteksi kami selalu tangguh terhadap ancaman deepfake dan spoofing yang terus berevolusi.";29 oct 2025;Lucky;Prudential;
+General;for esign, How long is the validity period of the signing_url URL?;by default 3 days, but configurable;14-Nov-25;Lucky;Danakini Indonesia;
+General;What is the host name to request callback url to merchant? (Glacier);"Host domain: https://api-b2b.dcistg.id, Depend on merchant want to use site to site or publicSTG
+Privy Ke keluar : 103.165.152.162 
+Dari luar ke Privy : 103.165.152.162 
+
+Prod
+Privy Ke keluar : 103.165.152.164
+Dari luar ke Privy : 103.165.152.175";14-Nov-25;Lucky;AFI;
+General;what is the code return by API if there is maintenance on Privy side;504 - Gateway Timeout;18/12/2025;Sungguh;Sea Group;
+General;how long registration will be stated error/timeout if dukcapil's maintenance/down;15 minutes (3 times retry by system, one retry per 5 minutes);18/12/2025;Sungguh;TPayLater;
+Digital-ID;why the landing page (QR Page) show 422 error after the process is done on Privy Apps instead of success page;"it is because there is no dash in the request-id format the merchant send. For reference can see from these links
+https://www.rfc-editor.org/rfc/rfc9562.html#name-test-vectors
+
+Golang -> https://github.com/google/uuid
+Plain Text
+uuid.NewString()
+ 
+Javascript -> https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID
+Plain Text
+crypto.randomUUID();
+PHP -> https://github.com/ramsey/uuid
+Plain Text
+$uuid4 = Uuid::uuid4();
+echo $uuid4->toString();";05/01/2026;Sungguh;Belajarlagi;
+Liveness SDK;1. Kalau nanti menggunakan SDK mobile apakah screen orientation ini masih applicable untuk di device seperti tab dan ipad (screen responsiveness)?;Screen sudah responsive dan support untuk device tab dan ipad namun untuk orientasinya hanya tersedia untuk potrait only dan tidak bisa diubah;3 dec 2025;Ika;Prudential;
+Liveness SDK;Question: picture 1 dan picture 2 itu apa?;auto capture, picture 1 sesuai posisi, picture 2 sesuai challenge, dan ini akan dikirimkan dalam bentuk base64 kepada merchant untuk dilanjutkan proses.;05-Jan-26;Lucky;Julo;
+Liveness SDK;Perbedaan passive dan active liveness?;"Passive liveness for api one
+Active liveness for SDK one (dont need to explain api behind our SDK, they wont get impacted).";05-Jan-26;Lucky;Julo;
+Liveness SDK;Liveness Action ada berapa?;"Challenge ada 6, minimum 1 action, recommend 3 action yg configurable:
+kedip mata
+Senyum
+buka mulut
+geleng kepala
+Tengok kanan
+tengok kiri
+
+will send randomly to user, and challenge will only be one to user.";05-Jan-26;Lucky;Julo;
+Liveness SDK;what is the size of SDK liveness?;Android and IOS Before Install 7,2 Mb (IOS) dan 8,84 Mb (android), after install 24,3 Mb (IOS) and 19,84 (android);05-Jan-26;Lucky;Julo;
+Liveness SDK;What do liveness validation are on the page?;"Validation:
+Face detection
+Face within circle
+Face distance
+Gelap/terang
+Multiple-face
+Angle";05-Jan-26;Lucky;Julo;
+Liveness SDK;What is the certification of Privy liveness?;SDK Liveness by Privy certified iBeta level 2, certificate click here https://privygate.sharepoint.com/:f:/r/sites/SolutionArchitect/Dokumen%20Berbagi/API%20Documentation/SDK%20Liveness/SDK%20Liveness%20Certificates?csf=1&web=1&e=te7TPR;05-Jan-26;Lucky;Julo;
+Watchlist;what source of the Privy watchlist API?;using accuris vendor and always updated from PPATTK;07-Jan-26;Sungguh;Aset Instrumen Digital;
+Liveness web;"mas bantu di check jg, kenapa di merchant staging liveness web DanaBagus ini tidak ada used_face parameter?
+apakah config?";"used faced ini relate ke logic pengecekan livenessnya spesificaaly jika hanya 1 foto aja yang di cek. jadi misal dari setup, kita set hanya face 1 aja yang digunakan untuk verifying liveness, berarti di callback akan munculin used_face: ""face_1"". begitupun sebaliknya untuk face 2, Tapi karena secara setup kita set face1 dan face2 harus diverifikasi, jadi tidak perlu dimunculkan used face nya yang mana.";20-Jan-26;Lucky;Danabagus;
+OCR;success rate extract OCRnya berapa persen ? Dan untuk rate kualitas extraction nya berapa persen?;Tingkat Keberhasilan Teknis OCR: 99,83%;22-Jan-26;Ika;Chubb Life;
+as is & digitalid;all negative error page on apps for register and digital id?;please check this link here: https://privygate-my.sharepoint.com/:p:/g/personal/fadhilah_dwiyanti_privy_id/IQB3qZs3tErETp2-EROir65eAU2KaNBHPAQkT0km5caRMks?e=5eLcjn&wdOrigin=TEAMS-MAGLEV.null_ns.rwc&wdExp=TEAMS-TREATMENT&wdhostclicktime=1769068566665&web=1;23-Jan-26;lucky;Fidac;
+Liveness SDK;"Hallo Mas @?Lucky Leonard? ada pertanyaan dari Pak @??+62 821?3331?8020?? bisa tolong dibantu mas , 
+
+*Pagi tim Privy,,,mau tanya mengenai icon Liveness privy kan sebelumnya bisa diubah menggunakan icon Kiwoom kalo boleh tau ukuran iconnya berapa x berapa pixel ya? karena kami ingin mengubah ke icon Kiwoom nantinya*";Logo size 60x122 pixel dengan max size 200 kb, informasi ini terdapat pada manual book liveness;30-Jan-26;lucky;Kiwoom;
+User-verif Avengers;is there validation on nik parameter;validation for 16 digits and numerical;30-Jan-26;lucky;easycash;
+General;"apakah 1 signer bisa sign 2x dalam sebuah document? dan saya mendapatkan error ??{""error"":{""code"":422,""errors"":[{""param"":""recipients"",""messages"":[""duplicate on id_user 'utpd6548' with signer_type 'Signer'""]}]}}??";"hi pak ini bisa dilakukan, tetapi array pada parameter bukan di signernya pak, tetapi di positionnya seperti contoh: ""recipients"": [
+  {
+    ""detail"": ""true"",
+    ""user_type"": ""0"",
+    ""autosign"": ""0"",
+    ""id_user"": ""aii6564"",
+    ""signer_type"": ""Signer"",
+    ""enterpriseToken"": """",
+    ""sign_positions"": [
+      {      ""posX"": ""100"",
+      ""posY"": ""200"",
+      ""signPage"": ""1""
+    },
+    {
+      ""posX"": ""200"",
+      ""posY"": ""300"",
+      ""signPage"": ""2""
+    }
+  }
+]";02-Feb-26;lucky;batumbu;
+Liveness SDK;what kinds of checking does the liveness rasp sdk checks?;"System Checking
+Device Check:
+Properties
+Path
+Kernel info
+Cpu info
+Vcam apps
+Emulator files
+Root apps
+Root binaries
+Read only files
+Root files
+Suspicious processes
+Frida port
+Classes injection
+
+Blacklist Check:
+DeviceID (dan ada based on NIK optional)
+
+Liveness Check:
+Liveness
+Face detect
+Face compare
+
+all of this information will not shown on enduser side, just knowledge for the client.";03-Feb-26;lucky;myboost;
+Liveness SDK;Liveness FRR and FAR impact if threshold is lowered than 80;"BUAT INTERNAL ONLY
+FAR & FRR Assessment using 2000 data sample with details:
+Genuine = 1000
+Not Genuine = 1000
+ 
+Threshold liveness = 80
+FAR = 5,20%
+FRR = 10.00%";09-Feb-26;Lucky;Pinjamin;this is for internal information only for SDK liveness
+General;Any link for helping to determine the signature position?;"yes, can use this link and upload the sample pdf document. The default size information for image signature also shown in this link
+
+https://privy-open-source.github.io/design-system/tools/pdf-coordinate-finder.html";19/02/2026;Sungguh;PTLAM-KES;
+General;can i put symbol on name during registration?;"?On the registration API, for character that allowed on name field are 
+	- symbols: < comma (,), period (.), and apostrophe (') >
+	- alphanumeric and space";20-Feb-26;Lucky;Rupiah Cepat;
+Liveness API;Berapa image size maximal untuk liveness picture?;For now the information is 2 MB;22-Feb-26;Kenny;Telkomsel;
+Network;VPN for merchant;"step-step request VPN connection
+1. inform case merchant mana yang mau pake VPN di grup itsec
+1.1 nama merchant
+1.2 service apa aja
+2. nanti itsec bakal kasih form VPN buat diterusin ke merchant
+3. email form tersebut ke merchant untuk diisi sama di setup sesuai dengan parameter anjuran ITsec (cc maling group itsec juga)
+4. nanti merchant balikin form yang udah diisi, terus ITsec langsung setup VPNnya
+ini VPN 2 arah merchant sama ITsec harus setup masing2 sesuai credential yang dikasih dari masing2nya juga. Kalo kedua sisi udah setup tapi connection masih belum established biasanya bakal meeting barengan antara ITSec sama merchant";26-Feb-26;Lucky;SPUN;informed by Sungguh
+RASP Liveness;Suspicious network di log RASP artinya apa?;"Percobaan bypass sistem terdeteksi
+ 
+Penyebabnya: reason ini akan muncul jika log rasp livenessnya tidak sampai ke service kita. 
+Penanganan: perlu di unblock dulu dari ronin, kemudian sarankan usernya coba lagi atau kalau masih terkendala bisa diarahkan switch ke device lain. Karena ini blocknya nempel ke device yang dipakai";26-Feb-26;Ika;Prudential;informed by PM
+General;is it possible to lower threshold of name similarity to authoritative partner or dukcapil during user verification?;on glacier: not configurable for now, on avengers yes configurable;30-Mar-26;Lucky;;
+Technical Details;Kenapa SLA proses di staging maupun production berbeda?semisal di prod setelah upload doc sudah langsung complete namun di staging masih in progress tidak langsung complete (user autosign);"Kami menginformasikan bahwa terdapat perbedaan performa SLA antara environment staging (STG) dan production (PROD) pada proses signing.
+
+Hal ini disebabkan oleh perbedaan spesifikasi infrastruktur di kedua environment tersebut. Environment production dirancang dengan kapasitas dan resource yang lebih tinggi (lebih powerful) untuk menangani volume transaksi yang besar serta kebutuhan operasional secara real-time. Sementara itu, environment staging difokuskan untuk kebutuhan testing dan validasi, sehingga spesifikasinya tidak sepenuhnya disetarakan dengan production.
+
+Dengan demikian, perbedaan SLA yang terjadi merupakan hal yang wajar dan tidak mencerminkan performa aktual pada saat sistem berjalan di production";20-Apr-26;Bulan;Asuransi Raksa;Informed by Wili
+General;If user onboard on Privy using phone number a, and next year user b onboard to privu with phone number a, will there be rejection on privyapp?;no, privy will have takeover mechanism for phone number, but for e-mail privy not allow user to register using same e-mail for differ user.;28-Apr-26;Lucky;Prudential;Informed by Dhillah
+RASP Liveness;Is there a significant difference in the file size or quality of liveness SDK results between iOS and Android? For example, does iOS produce higher-resolution or larger images, or is there a standard compression applied?;"While minor variations in file size may occur between platforms, they are not significant. Our system applies consistent compression and maintains similar resolution thresholds across both iOS and Android to ensure uniformity.
+
+The compression standards for liveness images are as follows:
+Maximum Image Size: Approximately 500KB
+Minimum Image Size: Approximately 100KB
+balikan dari liveness kita untuk skrang yang iOS
+
+IOS provide this information:
+face1Base64 (hasil compress)
+face2Base64 (hasil compress)
+face1Image (original capture)
+face2Image (original capture)";29-Apr-26;Lucky;Prudential;informed by Evan, Rycco
+RASP Liveness;"""sore team, izin bertanya pada detail liveness dashboard ronin.. kenapa ada yang liveness-nya memiliki media video, namun ada yang tidak memiliki video ya?""";"Jaringan device tidak stabil -> pengiriman media terputus ditengah jalan
+Activity user -> saat proses liveness berlangsung user minimize app dan pindah ke application lain, proses pengiriman video yang di background jadi tidak berhasil terkirim";30-Apr-26;Lucky;Batumbu;Aad
