@@ -98,9 +98,31 @@ export async function initializeSheet(initialFaqs = []) {
 
       if (initialFaqs.length > 0) {
         console.log(`📤 Uploading ${initialFaqs.length} initial FAQs to Google Sheets...`);
-        const values = initialFaqs.map(f => [
-          f.id, f.category, f.question, f.answer, f.date, f.reporter, f.merchant, new Date().toISOString(), new Date().toISOString(), ''
-        ]);
+        
+        const parseInitialDate = (dateStr) => {
+          if (!dateStr) return new Date().toISOString();
+          try {
+            // Handle various formats like "1 oct 2025", "14-Nov-25", "18/12/2025"
+            let normalized = dateStr.replace(/-/g, ' ').replace(/\//g, ' ');
+            
+            // Handle DD MM YYYY by checking if the first part is a day
+            const parts = normalized.split(/\s+/);
+            if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[2].length === 4) {
+              // Swap DD and MM for JS Date constructor (expects MM DD YYYY)
+              normalized = `${parts[1]} ${parts[0]} ${parts[2]}`;
+            }
+
+            const d = new Date(normalized);
+            return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+          } catch { return new Date().toISOString(); }
+        };
+
+        const values = initialFaqs.map(f => {
+          const createdAt = parseInitialDate(f.date);
+          return [
+            f.id, f.category, f.question, f.answer, f.date, f.reporter, f.merchant, createdAt, createdAt, ''
+          ];
+        });
         await client.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
           range: `${FAQ_SHEET}!A2`,

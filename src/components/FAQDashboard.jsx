@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FiSearch, FiPlus, FiChevronDown, FiEdit2, FiTrash2,
-  FiClock, FiLogOut, FiUser, FiFilter, FiX, FiRefreshCw
+  FiClock, FiLogOut, FiUser, FiFilter, FiX, FiRefreshCw,
+  FiArrowUp, FiArrowDown, FiAward, FiStar
 } from 'react-icons/fi';
 
 // Default category list as fallback
@@ -37,18 +38,89 @@ export default function FAQDashboard({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [openFaqId, setOpenFaqId] = useState(null);
+  const [sortOrder, setSortOrder] = useState('desc'); // default latest
 
-  const filteredFaqs = faqs.filter(faq => {
-    const matchesSearch = !searchQuery ||
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (faq.merchant && faq.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (faq.reporter && faq.reporter.toLowerCase().includes(searchQuery.toLowerCase()));
+  // --- Sorting Logic ---
+  const parseDate = (dateStr) => {
+    if (!dateStr) return 0;
+    try {
+      // Normalize common formats: "1 oct 2025", "14-Nov-25", "18/12/2025"
+      let normalized = dateStr.replace(/-/g, ' ').replace(/\//g, ' ');
+      
+      const parts = normalized.split(/\s+/);
+      // Handle DD MM YYYY (common in the dataset)
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[2].length === 4) {
+        normalized = `${parts[1]} ${parts[0]} ${parts[2]}`;
+      }
 
-    const matchesCategory = activeCategory === 'All' || faq.category === activeCategory;
+      const d = new Date(normalized);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    } catch { return 0; }
+  };
 
-    return matchesSearch && matchesCategory;
-  });
+  const filteredFaqs = useMemo(() => {
+    return faqs.filter(faq => {
+      const matchesSearch = !searchQuery ||
+        faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (faq.merchant && faq.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (faq.reporter && faq.reporter.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesCategory = activeCategory === 'All' || faq.category === activeCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [faqs, searchQuery, activeCategory]);
+
+  const sortedFaqs = useMemo(() => {
+    return [...filteredFaqs].sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : parseDate(a.date);
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : parseDate(b.date);
+      
+      if (timeA === timeB) {
+        // Fallback to sequential ID comparison if dates are identical
+        return sortOrder === 'desc' 
+          ? (b.id || '').localeCompare(a.id || '') 
+          : (a.id || '').localeCompare(b.id || '');
+      }
+
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+  }, [filteredFaqs, sortOrder]);
+
+  // --- Top Contributors Logic ---
+  const contributorsData = useMemo(() => {
+    const now = new Date();
+    const quarter = Math.floor(now.getMonth() / 3);
+    const year = now.getFullYear();
+    const startOfQuarter = new Date(year, quarter * 3, 1);
+    
+    const currentQuarterFaqs = faqs.filter(faq => {
+      // Prioritize the manual 'date' field for the leaderboard to avoid 
+      // issues with initialization timestamps in the 'createdAt' field.
+      const dateVal = parseDate(faq.date);
+      const created = dateVal > 0 ? new Date(dateVal) : (faq.createdAt ? new Date(faq.createdAt) : null);
+      return created && created >= startOfQuarter;
+    });
+
+    const counts = currentQuarterFaqs.reduce((acc, faq) => {
+      const reporter = (faq.reporter || 'Unknown').trim();
+      if (reporter) {
+        acc[reporter] = (acc[reporter] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    const top5 = Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
+    return {
+      list: top5,
+      label: `Q${quarter + 1} ${year}`
+    };
+  }, [faqs]);
 
   const toggleFaq = (id) => {
     setOpenFaqId(openFaqId === id ? null : id);
@@ -130,6 +202,28 @@ export default function FAQDashboard({
         </div>
       </div>
 
+      {/* Top Contributors Section */}
+      {contributorsData.list.length > 0 && (
+        <div className="contributors-container animate-fade-in">
+          <div className="contributors-header">
+            <FiAward className="award-icon" />
+            <span>Top Contributors <strong>{contributorsData.label}</strong></span>
+          </div>
+          <div className="contributors-list">
+            {contributorsData.list.map((c, i) => (
+              <div key={c.name} className="contributor-tag glass">
+                <span className="contributor-rank">{i + 1}</span>
+                <span className="contributor-name">{c.name}</span>
+                <span className="contributor-count">
+                  <FiStar className="star-icon" />
+                  {c.count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Category Filters & Add Button */}
       <div className="toolbar">
         <div className="category-filters">
@@ -145,15 +239,36 @@ export default function FAQDashboard({
             </button>
           ))}
         </div>
-        <button className="btn-primary add-btn" onClick={onAdd} id="add-faq-btn">
-          <FiPlus style={{ marginRight: '0.5rem' }} />
-          Add FAQ
-        </button>
+        
+        <div className="toolbar-actions">
+          <div className="sort-control glass">
+            <button 
+              className={`sort-btn ${sortOrder === 'desc' ? 'active' : ''}`}
+              onClick={() => setSortOrder('desc')}
+              title="Newest first"
+            >
+              <FiArrowDown />
+              <span>Latest</span>
+            </button>
+            <button 
+              className={`sort-btn ${sortOrder === 'asc' ? 'active' : ''}`}
+              onClick={() => setSortOrder('asc')}
+              title="Oldest first"
+            >
+              <FiArrowUp />
+              <span>Oldest</span>
+            </button>
+          </div>
+          <button className="btn-primary add-btn" onClick={onAdd} id="add-faq-btn">
+            <FiPlus style={{ marginRight: '0.5rem' }} />
+            Add FAQ
+          </button>
+        </div>
       </div>
 
       {/* Results Count */}
       <div className="results-info">
-        <span>{filteredFaqs.length} {filteredFaqs.length === 1 ? 'result' : 'results'}</span>
+        <span>{sortedFaqs.length} {sortedFaqs.length === 1 ? 'result' : 'results'}</span>
         {(searchQuery || activeCategory !== 'All') && (
           <button
             className="clear-filters"
@@ -166,8 +281,8 @@ export default function FAQDashboard({
 
       {/* FAQ List */}
       <div className="faq-list">
-        {filteredFaqs.length > 0 ? (
-          filteredFaqs.map(faq => (
+        {sortedFaqs.length > 0 ? (
+          sortedFaqs.map(faq => (
             <div
               key={faq.id}
               className={`faq-item glass ${openFaqId === faq.id ? 'open' : ''}`}
