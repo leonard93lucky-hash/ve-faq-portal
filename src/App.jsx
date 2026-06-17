@@ -9,7 +9,6 @@ import {
   login, fetchFAQs, addFAQ, updateFAQ, deleteFAQ, fetchLogs, 
   fetchCategories, addCategory, deleteCategory 
 } from './api.js';
-import usersData from './users.json';
 
 function App() {
   // Auth state
@@ -45,7 +44,7 @@ function App() {
       ]);
       
       // Frontend validation: Filter logs by userId or resolved userName
-      const resolvedName = usersData[userId] || userId;
+      const resolvedName = userName || userId;
       const filteredLogs = logData.filter(log => {
         const logUser = String(log.userId || '').trim().toUpperCase();
         const targetId = String(userId).trim().toUpperCase();
@@ -61,7 +60,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, userName]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -122,7 +121,7 @@ function App() {
 
   const handleRefreshLogs = async () => {
     const logData = await fetchLogs(userId);
-    const resolvedName = usersData[userId] || userId;
+    const resolvedName = userName || userId;
     const filteredLogs = logData.filter(log => {
       const logUser = String(log.userId || '').trim().toUpperCase();
       const targetId = String(userId).trim().toUpperCase();

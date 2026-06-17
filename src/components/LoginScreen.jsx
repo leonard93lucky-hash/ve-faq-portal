@@ -39,14 +39,14 @@ export default function LoginScreen({ onLogin }) {
           />
         </div>
         <h1>FAQ Portal</h1>
-        <p>Enter your User ID to access the internal knowledge base</p>
+        <p>Enter your PrivyID to access the internal knowledge base</p>
         <form onSubmit={handleSubmit} className="login-form" id="login-form">
           <div className="input-group">
             <input
               id="user-id-input"
               type="text"
               className="input-field"
-              placeholder="e.g. Lucky, Sungguh, Olla..."
+              placeholder="e.g. PRVY1234..."
               value={userId}
               onChange={(e) => { setUserId(e.target.value); setError(''); }}
               autoFocus

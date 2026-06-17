@@ -1,13 +1,19 @@
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const FAQ_SHEET = 'FAQ_Data';
 const LOG_SHEET = 'Activity_Log';
 const DELETED_SHEET = 'Deleted';
 const CATEGORIES_SHEET = 'Categories';
+const USERS_SHEET = 'Users';
 
 let sheets = null;
 
@@ -64,7 +70,7 @@ export async function initializeSheet(initialFaqs = []) {
     const meta = await client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
     const existingSheets = meta.data.sheets.map(s => s.properties.title);
     
-    const requiredSheets = [FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET];
+    const requiredSheets = [FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET];
     const missingSheets = requiredSheets.filter(s => !existingSheets.includes(s));
 
     if (missingSheets.length > 0) {
@@ -205,6 +211,43 @@ export async function initializeSheet(initialFaqs = []) {
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: defaults },
       });
+    }
+
+    // 6. Check Users headers
+    const usersListRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${USERS_SHEET}!A1:A1`,
+    });
+
+    if (!usersListRes.data.values || usersListRes.data.values.length === 0) {
+      console.log('👥 Initializing Users sheet...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${USERS_SHEET}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['UserID', 'UserName']],
+        },
+      });
+      // Try to load initial users from users.json to populate the sheet
+      try {
+        const USERS_FILE = path.join(__dirname, '..', 'src', 'users.json');
+        if (fs.existsSync(USERS_FILE)) {
+          const defaultUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+          const userRows = Object.entries(defaultUsers).map(([userId, userName]) => [userId, userName]);
+          if (userRows.length > 0) {
+            console.log(`📤 Uploading ${userRows.length} initial users to Google Sheets...`);
+            await client.spreadsheets.values.append({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `${USERS_SHEET}!A2`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: userRows },
+            });
+          }
+        }
+      } catch (jsonErr) {
+        console.warn('⚠️ Could not populate Users sheet from users.json fallback:', jsonErr.message);
+      }
     }
   } catch (err) {
     console.error('❌ Google Sheets Initialization Error:', err.message);
@@ -550,3 +593,26 @@ export async function testConnection() {
 
   return report;
 }
+
+export async function getUsers() {
+  const client = await getSheetsClient();
+  if (!client) return {};
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${USERS_SHEET}!A2:B`,
+    });
+    const rows = res.data.values || [];
+    const userMap = {};
+    for (const row of rows) {
+      if (row[0]) {
+        userMap[row[0].trim().toUpperCase()] = row[1] ? row[1].trim() : '';
+      }
+    }
+    return userMap;
+  } catch (err) {
+    console.error('❌ Error fetching users from Google Sheet:', err.message);
+    return {};
+  }
+}
+

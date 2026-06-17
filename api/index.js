@@ -58,13 +58,46 @@ if (useSheets) {
   console.log('⚠️  Google Sheets NOT configured — using local JSON fallback');
 }
 
+async function resolveUserName(userId) {
+  if (!userId) return '';
+  const code = userId.trim().toUpperCase();
+  if (validUsers[code]) {
+    return validUsers[code];
+  }
+  if (useSheets) {
+    try {
+      console.log(`🔍 User ${code} not in cache, fetching latest from Google Sheets...`);
+      const sheetUsers = await gsheets.getUsers();
+      if (Object.keys(sheetUsers).length > 0) {
+        validUsers = { ...validUsers, ...sheetUsers };
+      }
+    } catch (err) {
+      console.error('Failed to refresh users cache:', err.message);
+    }
+  }
+  return validUsers[code] || userId;
+}
+
 // ===== AUTH =====
-app.post('/api/auth', (req, res) => {
+app.post('/api/auth', async (req, res) => {
   const { userId } = req.body;
   if (!userId || !userId.trim()) {
     return res.status(400).json({ success: false, error: 'Access code is required' });
   }
   const code = userId.trim().toUpperCase();
+  
+  if (useSheets) {
+    try {
+      console.log('🔄 Fetching latest user registry from Google Sheets...');
+      const sheetUsers = await gsheets.getUsers();
+      if (Object.keys(sheetUsers).length > 0) {
+        validUsers = sheetUsers;
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not refresh users from Google Sheets during auth:', err.message);
+    }
+  }
+
   const name = validUsers[code];
   if (!name) {
     return res.status(401).json({ success: false, error: 'Invalid access code. Please check your code and try again.' });
@@ -89,7 +122,7 @@ app.get('/api/faqs', async (req, res) => {
 app.post('/api/faqs', async (req, res) => {
   try {
     const { userId, ...faqData } = req.body;
-    const userName = validUsers[userId] || userId;
+    const userName = await resolveUserName(userId);
     
     if (useSheets) {
       const newFaq = await gsheets.addFAQ(faqData, userName);
@@ -119,7 +152,7 @@ app.put('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { userId, ...faqData } = req.body;
-    const userName = validUsers[userId] || userId;
+    const userName = await resolveUserName(userId);
 
     if (useSheets) {
       const updated = await gsheets.updateFAQ(id, faqData, userName);
@@ -154,7 +187,7 @@ app.delete('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { userId } = req.body;
-    const userName = validUsers[userId] || userId;
+    const userName = await resolveUserName(userId);
 
     if (useSheets) {
       await gsheets.deleteFAQ(id, userName);
@@ -219,7 +252,7 @@ app.delete('/api/categories/:name', async (req, res) => {
 app.get('/api/logs', async (req, res) => {
   try {
     const { userId } = req.query;
-    const resolvedName = userId ? (validUsers[userId] || userId) : null;
+    const resolvedName = userId ? (await resolveUserName(userId)) : null;
     
     console.log(`📋 Fetching logs for userId: ${userId} (Resolved Name: ${resolvedName})`);
 
