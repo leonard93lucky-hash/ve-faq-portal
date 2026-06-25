@@ -226,7 +226,7 @@ export async function initializeSheet(initialFaqs = []) {
         range: `${USERS_SHEET}!A1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [['UserID', 'UserName']],
+          values: [['UserID', 'UserName', 'PIN', 'Email']],
         },
       });
       // Try to load initial users from users.json to populate the sheet
@@ -234,7 +234,7 @@ export async function initializeSheet(initialFaqs = []) {
         const USERS_FILE = path.join(__dirname, '..', 'src', 'users.json');
         if (fs.existsSync(USERS_FILE)) {
           const defaultUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-          const userRows = Object.entries(defaultUsers).map(([userId, userName]) => [userId, userName]);
+          const userRows = Object.entries(defaultUsers).map(([userId, userName]) => [userId, userName, '', '']);
           if (userRows.length > 0) {
             console.log(`📤 Uploading ${userRows.length} initial users to Google Sheets...`);
             await client.spreadsheets.values.append({
@@ -247,6 +247,27 @@ export async function initializeSheet(initialFaqs = []) {
         }
       } catch (jsonErr) {
         console.warn('⚠️ Could not populate Users sheet from users.json fallback:', jsonErr.message);
+      }
+    } else {
+      // Ensure the header includes PIN and Email columns if missing (for existing sheets)
+      const currentHeaders = usersListRes.data.values[0] || [];
+      if (!currentHeaders.includes('PIN')) {
+        console.log('🔧 Adding PIN and Email headers to Users sheet...');
+        const fullHeadersRes = await client.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${USERS_SHEET}!A1:D1`,
+        });
+        const existingHeaders = fullHeadersRes.data.values?.[0] || [];
+        const newHeaders = ['UserID', 'UserName', 'PIN', 'Email'];
+        // Only update if needed
+        if (JSON.stringify(existingHeaders) !== JSON.stringify(newHeaders)) {
+          await client.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${USERS_SHEET}!A1:D1`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [newHeaders] },
+          });
+        }
       }
     }
   } catch (err) {
@@ -600,13 +621,17 @@ export async function getUsers() {
   try {
     const res = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${USERS_SHEET}!A2:B`,
+      range: `${USERS_SHEET}!A2:D`,
     });
     const rows = res.data.values || [];
     const userMap = {};
     for (const row of rows) {
       if (row[0]) {
-        userMap[row[0].trim().toUpperCase()] = row[1] ? row[1].trim() : '';
+        userMap[row[0].trim().toUpperCase()] = {
+          name: row[1] ? row[1].trim() : '',
+          pin: row[2] ? row[2].trim() : '',
+          email: row[3] ? row[3].trim().toLowerCase() : '',
+        };
       }
     }
     return userMap;
@@ -616,3 +641,32 @@ export async function getUsers() {
   }
 }
 
+export async function saveUserCredentials(userId, pin, email) {
+  const client = await getSheetsClient();
+  if (!client) throw new Error('Google Sheets not configured');
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${USERS_SHEET}!A:D`,
+    });
+    const rows = res.data.values || [];
+    let rowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] && rows[i][0].trim().toUpperCase() === userId.toUpperCase()) {
+        rowIndex = i + 1; // 1-based
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('User not found in sheet');
+    await client.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${USERS_SHEET}!C${rowIndex}:D${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[pin, email]] },
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('❌ Error saving user credentials:', err.message);
+    throw err;
+  }
+}

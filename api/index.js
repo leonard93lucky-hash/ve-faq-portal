@@ -16,10 +16,19 @@ app.use(cors());
 app.use(express.json());
 
 // ===== User Registry =====
+// validUsers maps USERID -> { name, pin, email }
 const USERS_FILE = path.join(__dirname, '..', 'src', 'users.json');
 let validUsers = {};
 try {
-  validUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+  const raw = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+  // Support both flat {id: name} and full {id: {name, pin, email}} formats
+  for (const [id, val] of Object.entries(raw)) {
+    if (typeof val === 'string') {
+      validUsers[id.toUpperCase()] = { name: val, pin: '', email: '' };
+    } else {
+      validUsers[id.toUpperCase()] = { name: val.name || '', pin: val.pin || '', email: val.email || '' };
+    }
+  }
   console.log(`👥 Loaded ${Object.keys(validUsers).length} users from registry`);
 } catch { console.warn('⚠️  Could not load users.json'); }
 
@@ -62,7 +71,7 @@ async function resolveUserName(userId) {
   if (!userId) return '';
   const code = userId.trim().toUpperCase();
   if (validUsers[code]) {
-    return validUsers[code];
+    return validUsers[code].name || validUsers[code];
   }
   if (useSheets) {
     try {
@@ -75,17 +84,56 @@ async function resolveUserName(userId) {
       console.error('Failed to refresh users cache:', err.message);
     }
   }
-  return validUsers[code] || userId;
+  const u = validUsers[code];
+  return (u && u.name) ? u.name : (typeof u === 'string' ? u : userId);
+}
+
+// Find a user by UserID (case-insensitive) OR by registered email
+function findUserByIdOrEmail(identifier) {
+  if (!identifier) return null;
+  const lower = identifier.trim().toLowerCase();
+  const upper = identifier.trim().toUpperCase();
+  // Try UserID first
+  if (validUsers[upper]) {
+    return { userId: upper, ...validUsers[upper] };
+  }
+  // Try email match
+  for (const [id, data] of Object.entries(validUsers)) {
+    const email = (typeof data === 'string') ? '' : (data.email || '');
+    if (email && email.toLowerCase() === lower) {
+      return { userId: id, ...(typeof data === 'string' ? { name: data, pin: '', email: '' } : data) };
+    }
+  }
+  return null;
+}
+
+// Save PIN & Email locally (fallback when Sheets not configured)
+function saveUserLocal(userId, pin, email) {
+  try {
+    const code = userId.toUpperCase();
+    if (validUsers[code]) {
+      validUsers[code].pin = pin;
+      validUsers[code].email = email;
+    }
+    // Persist to users.json — write as flat name strings since that's the existing format
+    // But also preserve pin/email by writing a mixed format isn't ideal.
+    // For local dev, we just keep it in-memory (pin works per session).
+    // To fully persist locally, we'd need to rewrite users.json. We skip that for now.
+    console.log(`💾 PIN saved in-memory for local dev: ${code}`);
+  } catch (err) {
+    console.warn('⚠️ saveUserLocal error:', err.message);
+  }
 }
 
 // ===== AUTH =====
 app.post('/api/auth', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId || !userId.trim()) {
-    return res.status(400).json({ success: false, error: 'Access code is required' });
+  const { identifier, pin, email } = req.body;
+
+  if (!identifier || !identifier.trim()) {
+    return res.status(400).json({ success: false, error: 'PrivyID or email is required' });
   }
-  const code = userId.trim().toUpperCase();
-  
+
+  // Always refresh user registry from Sheets on auth calls
   if (useSheets) {
     try {
       console.log('🔄 Fetching latest user registry from Google Sheets...');
@@ -98,11 +146,59 @@ app.post('/api/auth', async (req, res) => {
     }
   }
 
-  const name = validUsers[code];
-  if (!name) {
-    return res.status(401).json({ success: false, error: 'Invalid access code. Please check your code and try again.' });
+  const user = findUserByIdOrEmail(identifier);
+
+  if (!user) {
+    return res.status(401).json({ success: false, error: 'PrivyID or email not found. Please check and try again.' });
   }
-  res.json({ success: true, userId: code, name });
+
+  // --- Flow 1: Check only (no pin/email provided) — determine what step is next ---
+  if (pin === undefined && email === undefined) {
+    if (user.pin && user.pin.length === 6) {
+      return res.json({ success: false, status: 'requires_pin', userId: user.userId, name: user.name });
+    } else {
+      return res.json({ success: false, status: 'setup_pin', userId: user.userId, name: user.name });
+    }
+  }
+
+  // --- Flow 2: Verify PIN (existing user) ---
+  if (pin !== undefined && email === undefined) {
+    if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: 'PIN must be exactly 6 digits.' });
+    }
+    if (!user.pin) {
+      return res.status(400).json({ success: false, error: 'No PIN set. Please set up your PIN first.' });
+    }
+    if (user.pin !== pin) {
+      return res.status(401).json({ success: false, error: 'Incorrect PIN. Please try again.' });
+    }
+    return res.json({ success: true, userId: user.userId, name: user.name });
+  }
+
+  // --- Flow 3: Setup PIN + Email (first-time) ---
+  if (pin !== undefined && email !== undefined) {
+    if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: 'PIN must be exactly 6 digits.' });
+    }
+    if (!email || !email.trim().toLowerCase().endsWith('@privy.id')) {
+      return res.status(400).json({ success: false, error: 'Email must be a valid @privy.id address.' });
+    }
+    try {
+      if (useSheets) {
+        await gsheets.saveUserCredentials(user.userId, pin, email.trim().toLowerCase());
+        // Refresh cache
+        const sheetUsers = await gsheets.getUsers();
+        if (Object.keys(sheetUsers).length > 0) validUsers = sheetUsers;
+      } else {
+        saveUserLocal(user.userId, pin, email.trim().toLowerCase());
+      }
+      return res.json({ success: true, userId: user.userId, name: user.name });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: 'Failed to save PIN. Please try again.' });
+    }
+  }
+
+  return res.status(400).json({ success: false, error: 'Invalid request.' });
 });
 
 // ===== FAQs =====

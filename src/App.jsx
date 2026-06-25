@@ -7,7 +7,7 @@ import StatsDashboard from './components/StatsDashboard.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import Toast from './components/Toast.jsx';
 import { 
-  login, fetchFAQs, addFAQ, updateFAQ, deleteFAQ, fetchLogs, 
+  fetchFAQs, addFAQ, updateFAQ, deleteFAQ, fetchLogs, 
   fetchCategories, addCategory, deleteCategory 
 } from './api.js';
 
@@ -71,8 +71,8 @@ function App() {
   }, [isAuthenticated, loadData]);
 
   // --- Handlers ---
-  const handleLogin = async (code) => {
-    const result = await login(code);
+  // LoginScreen fully handles authentication steps and calls onLogin with the resolved user
+  const handleLogin = (result) => {
     setUserId(result.userId);
     setUserName(result.name);
     setIsAuthenticated(true);

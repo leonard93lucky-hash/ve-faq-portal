@@ -32,19 +32,27 @@ async function request(endpoint, options = {}) {
 }
 
 // --- Auth ---
-export async function login(userId) {
-  if (!userId || !userId.trim()) throw new Error('Access code is required');
-  const data = await request('/auth', {
+export async function login(identifier, pin, email) {
+  if (!identifier || !identifier.trim()) throw new Error('PrivyID or email is required');
+  const body = { identifier: identifier.trim() };
+  if (pin !== undefined) body.pin = pin;
+  if (email !== undefined) body.email = email;
+
+  // Auth MUST go to the real backend — no mock fallback for security
+  const res = await fetch(`${API_URL}/auth`, {
     method: 'POST',
-    body: JSON.stringify({ userId: userId.trim() }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  if (data) return data;
-  // Mock fallback: validate against local users.json
-  const code = userId.trim().toUpperCase();
-  const name = usersData[code];
-  if (!name) throw new Error('Invalid access code. Please check your code and try again.');
-  return { success: true, userId: code, name };
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || `Auth error: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return json;
 }
+
 
 // --- FAQs ---
 export async function fetchFAQs() {
