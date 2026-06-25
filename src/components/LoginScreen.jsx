@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FiShield, FiArrowRight, FiArrowLeft, FiLoader, FiLock, FiMail } from 'react-icons/fi';
+import { FiShield, FiArrowRight, FiArrowLeft, FiLock, FiMail, FiEye, FiEyeOff } from 'react-icons/fi';
 import { login } from '../api.js';
 
 // Step 1: Enter PrivyID or Email
@@ -15,6 +15,7 @@ export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     if ((step === 'pin_verify' || step === 'pin_setup') && pinRefs.current[0]) {
@@ -54,6 +55,7 @@ export default function LoginScreen({ onLogin }) {
     setPinDigits(['', '', '', '', '', '']);
     setEmail('');
     setError('');
+    setShowPin(false);
   };
 
   const handleCodeSubmit = async (e) => {
@@ -171,7 +173,7 @@ export default function LoginScreen({ onLogin }) {
                   <input
                     key={i}
                     ref={el => pinRefs.current[i] = el}
-                    type="text"
+                    type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     maxLength={1}
                     className={`pin-box${error ? ' pin-box-error' : ''}`}
@@ -184,6 +186,16 @@ export default function LoginScreen({ onLogin }) {
                   />
                 ))}
               </div>
+              <button
+                type="button"
+                className="pin-toggle-btn"
+                onClick={() => setShowPin(v => !v)}
+                id="toggle-pin-visibility"
+                aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+              >
+                {showPin ? <FiEyeOff size={15} /> : <FiEye size={15} />}
+                {showPin ? 'Hide PIN' : 'Show PIN'}
+              </button>
               <button type="submit" className="btn-primary login-btn" id="verify-pin-btn" disabled={loading || pinValue.length !== 6}>
                 {loading ? <>⏳ Verifying...</> : <>Access Portal <FiArrowRight style={{ marginLeft: '0.5rem' }} /></>}
               </button>
@@ -209,7 +221,7 @@ export default function LoginScreen({ onLogin }) {
                   <input
                     key={i}
                     ref={el => pinRefs.current[i] = el}
-                    type="text"
+                    type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     maxLength={1}
                     className={`pin-box${error && error.toLowerCase().includes('pin') ? ' pin-box-error' : ''}`}
@@ -222,6 +234,16 @@ export default function LoginScreen({ onLogin }) {
                   />
                 ))}
               </div>
+              <button
+                type="button"
+                className="pin-toggle-btn"
+                onClick={() => setShowPin(v => !v)}
+                id="toggle-setup-pin-visibility"
+                aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+              >
+                {showPin ? <FiEyeOff size={15} /> : <FiEye size={15} />}
+                {showPin ? 'Hide PIN' : 'Show PIN'}
+              </button>
               <div className="pin-label" style={{ marginTop: '1.25rem' }}>
                 <FiMail style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
                 Privy Email
