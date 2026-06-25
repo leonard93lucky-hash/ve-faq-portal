@@ -3,6 +3,7 @@ import LoginScreen from './components/LoginScreen.jsx';
 import FAQDashboard from './components/FAQDashboard.jsx';
 import FAQModal from './components/FAQModal.jsx';
 import ActivityLog from './components/ActivityLog.jsx';
+import StatsDashboard from './components/StatsDashboard.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import Toast from './components/Toast.jsx';
 import { 
@@ -27,6 +28,7 @@ function App() {
   const [editingFaq, setEditingFaq] = useState(null);
   const [deletingFaq, setDeletingFaq] = useState(null);
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -161,6 +163,7 @@ function App() {
         onEdit={handleEditFaq}
         onDelete={handleDeleteFaq}
         onShowLogs={() => setIsLogOpen(true)}
+        onShowStats={() => setIsStatsOpen(true)}
         onLogout={handleLogout}
         logCount={logs.length}
         onRefresh={loadData}
@@ -182,6 +185,12 @@ function App() {
         onClose={() => setIsLogOpen(false)}
         logs={logs}
         onRefresh={handleRefreshLogs}
+      />
+
+      <StatsDashboard
+        isOpen={isStatsOpen}
+        onClose={() => setIsStatsOpen(false)}
+        faqs={faqs}
       />
 
       <ConfirmDialog

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   FiSearch, FiPlus, FiChevronDown, FiEdit2, FiTrash2,
   FiClock, FiLogOut, FiUser, FiFilter, FiX, FiRefreshCw,
@@ -30,6 +30,7 @@ export default function FAQDashboard({
   onEdit,
   onDelete,
   onShowLogs,
+  onShowStats,
   onLogout,
   logCount,
   onRefresh,
@@ -37,8 +38,11 @@ export default function FAQDashboard({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [activeContributor, setActiveContributor] = useState('All');
   const [openFaqId, setOpenFaqId] = useState(null);
   const [sortOrder, setSortOrder] = useState('desc'); // default latest
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // --- Sorting Logic ---
   const parseDate = (dateStr) => {
@@ -58,6 +62,11 @@ export default function FAQDashboard({
     } catch { return 0; }
   };
 
+  const uniqueContributors = useMemo(() => {
+    const reporters = faqs.map(faq => (faq.reporter || '').trim()).filter(Boolean);
+    return [...new Set(reporters)].sort((a, b) => a.localeCompare(b));
+  }, [faqs]);
+
   const filteredFaqs = useMemo(() => {
     return faqs.filter(faq => {
       const matchesSearch = !searchQuery ||
@@ -67,10 +76,11 @@ export default function FAQDashboard({
         (faq.reporter && faq.reporter.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCategory = activeCategory === 'All' || faq.category === activeCategory;
+      const matchesContributor = activeContributor === 'All' || (faq.reporter && faq.reporter.trim() === activeContributor);
 
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesCategory && matchesContributor;
     });
-  }, [faqs, searchQuery, activeCategory]);
+  }, [faqs, searchQuery, activeCategory, activeContributor]);
 
   const sortedFaqs = useMemo(() => {
     return [...filteredFaqs].sort((a, b) => {
@@ -87,6 +97,17 @@ export default function FAQDashboard({
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
   }, [filteredFaqs, sortOrder]);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeCategory, activeContributor, itemsPerPage]);
+
+  const totalPages = Math.ceil(sortedFaqs.length / itemsPerPage);
+
+  const paginatedFaqs = useMemo(() => {
+    return sortedFaqs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [sortedFaqs, currentPage, itemsPerPage]);
 
   // --- Top Contributors Logic ---
   const contributorsData = useMemo(() => {
@@ -155,6 +176,10 @@ export default function FAQDashboard({
           <h1 className="logo-text" style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>VE FAQ Portal</h1>
         </div>
         <div className="top-bar-right">
+          <button className="icon-btn-text" onClick={onShowStats} id="show-stats-btn">
+            <FiAward />
+            <span>Leaderboard</span>
+          </button>
           <button className="icon-btn-text" onClick={onShowLogs} id="show-logs-btn">
             <FiClock />
             <span>Activity Log</span>
@@ -241,6 +266,21 @@ export default function FAQDashboard({
         </div>
         
         <div className="toolbar-actions">
+          <div className="contributor-filter-container glass" title="Filter by Contributor">
+            <FiUser className="filter-icon-sm" />
+            <select
+              value={activeContributor}
+              onChange={(e) => setActiveContributor(e.target.value)}
+              className="contributor-select"
+              id="contributor-filter-select"
+            >
+              <option value="All">All Contributors</option>
+              {uniqueContributors.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="sort-control glass">
             <button 
               className={`sort-btn ${sortOrder === 'desc' ? 'active' : ''}`}
@@ -269,10 +309,10 @@ export default function FAQDashboard({
       {/* Results Count */}
       <div className="results-info">
         <span>{sortedFaqs.length} {sortedFaqs.length === 1 ? 'result' : 'results'}</span>
-        {(searchQuery || activeCategory !== 'All') && (
+        {(searchQuery || activeCategory !== 'All' || activeContributor !== 'All') && (
           <button
             className="clear-filters"
-            onClick={() => { setSearchQuery(''); setActiveCategory('All'); }}
+            onClick={() => { setSearchQuery(''); setActiveCategory('All'); setActiveContributor('All'); }}
           >
             Clear filters
           </button>
@@ -281,8 +321,8 @@ export default function FAQDashboard({
 
       {/* FAQ List */}
       <div className="faq-list">
-        {sortedFaqs.length > 0 ? (
-          sortedFaqs.map(faq => (
+        {paginatedFaqs.length > 0 ? (
+          paginatedFaqs.map(faq => (
             <div
               key={faq.id}
               className={`faq-item glass ${openFaqId === faq.id ? 'open' : ''}`}
@@ -345,6 +385,47 @@ export default function FAQDashboard({
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {sortedFaqs.length > 0 && (
+        <div className="pagination-container glass animate-fade-in">
+          <div className="pagination-left">
+            <span>Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+              }}
+              className="pagination-select"
+            >
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+            </select>
+            <span className="pagination-info">
+              Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, sortedFaqs.length)} of {sortedFaqs.length} FAQs
+            </span>
+          </div>
+          <div className="pagination-right">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="pagination-btn"
+            >
+              Previous
+            </button>
+            <span className="pagination-current">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="pagination-btn"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
