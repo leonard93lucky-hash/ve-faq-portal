@@ -163,3 +163,39 @@ export async function deleteCategory(name) {
   });
   return data;
 }
+
+// --- Ratings ---
+export async function fetchRatings() {
+  const data = await request('/ratings');
+  return data || {};
+}
+
+export async function rateFAQ(faqId, userId, vote) {
+  const data = await request(`/faqs/${faqId}/rate`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, vote }),
+  });
+  return data;
+}
+
+// --- Related FAQs ---
+export async function fetchRelated() {
+  const data = await request('/related');
+  return data || [];
+}
+
+export async function addRelated(faqId, userId, relatedFaqId, note = '') {
+  const data = await request(`/faqs/${faqId}/related`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, relatedFaqId, note }),
+  });
+  return data;
+}
+
+export async function removeRelated(faqId, relatedFaqId, userId) {
+  const data = await request(`/faqs/${faqId}/related/${relatedFaqId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ userId }),
+  });
+  return data;
+}

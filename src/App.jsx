@@ -8,7 +8,8 @@ import ConfirmDialog from './components/ConfirmDialog.jsx';
 import Toast from './components/Toast.jsx';
 import { 
   fetchFAQs, addFAQ, updateFAQ, deleteFAQ, fetchLogs, 
-  fetchCategories, addCategory, deleteCategory 
+  fetchCategories, addCategory, deleteCategory,
+  fetchRatings, rateFAQ, fetchRelated, addRelated, removeRelated
 } from './api.js';
 
 function App() {
@@ -21,6 +22,8 @@ function App() {
   const [faqs, setFaqs] = useState([]);
   const [logs, setLogs] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [ratings, setRatings] = useState({});
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // UI state
@@ -39,10 +42,12 @@ function App() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [faqData, logData, catData] = await Promise.all([
+      const [faqData, logData, catData, ratingsData, relatedData] = await Promise.all([
         fetchFAQs(), 
         fetchLogs(userId), 
-        fetchCategories()
+        fetchCategories(),
+        fetchRatings(),
+        fetchRelated(),
       ]);
       
       // Frontend validation: Filter logs by userId or resolved userName
@@ -57,6 +62,8 @@ function App() {
       setFaqs(faqData);
       setLogs(filteredLogs);
       setCategories(catData);
+      setRatings(ratingsData);
+      setRelated(relatedData);
     } catch (err) {
       showToast('Failed to load data: ' + err.message, 'error');
     } finally {
@@ -84,6 +91,8 @@ function App() {
     setUserName('');
     setFaqs([]);
     setLogs([]);
+    setRatings({});
+    setRelated([]);
   };
 
   const handleAddFaq = () => {
@@ -143,6 +152,43 @@ function App() {
     await loadData();
   };
 
+  const handleRate = async (faqId, vote) => {
+    try {
+      const updated = await rateFAQ(faqId, userId, vote);
+      if (updated) {
+        setRatings(prev => ({ ...prev, [faqId]: updated }));
+      }
+    } catch (err) {
+      showToast('Failed to submit rating: ' + err.message, 'error');
+    }
+  };
+
+  const handleAddRelated = async (faqId, relatedFaqId, note) => {
+    try {
+      const result = await addRelated(faqId, userId, relatedFaqId, note);
+      if (result?.success === false && result?.reason === 'already_exists') {
+        showToast('These FAQs are already linked.', 'error');
+      } else {
+        showToast('Related FAQ linked!');
+        const relatedData = await fetchRelated();
+        setRelated(relatedData);
+      }
+    } catch (err) {
+      showToast('Failed to link FAQ: ' + err.message, 'error');
+    }
+  };
+
+  const handleRemoveRelated = async (faqId, relatedFaqId) => {
+    try {
+      await removeRelated(faqId, relatedFaqId, userId);
+      showToast('Link removed.');
+      const relatedData = await fetchRelated();
+      setRelated(relatedData);
+    } catch (err) {
+      showToast('Failed to remove link: ' + err.message, 'error');
+    }
+  };
+
   // --- Render ---
   if (!isAuthenticated) {
     return (
@@ -158,7 +204,10 @@ function App() {
       <FAQDashboard
         faqs={faqs}
         userName={userName}
+        userId={userId}
         categories={categories}
+        ratings={ratings}
+        related={related}
         onAdd={handleAddFaq}
         onEdit={handleEditFaq}
         onDelete={handleDeleteFaq}
@@ -168,6 +217,9 @@ function App() {
         logCount={logs.length}
         onRefresh={loadData}
         isLoading={loading}
+        onRate={handleRate}
+        onAddRelated={handleAddRelated}
+        onRemoveRelated={handleRemoveRelated}
       />
 
       <FAQModal
@@ -191,6 +243,7 @@ function App() {
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
         faqs={faqs}
+        ratings={ratings}
       />
 
       <ConfirmDialog

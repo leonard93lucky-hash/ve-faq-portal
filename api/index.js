@@ -35,6 +35,8 @@ try {
 // ===== In-memory fallback (when Google Sheets not configured) =====
 let localFaqs = [];
 let localLogs = [];
+let localRatings = {}; // { [faqId]: { [userId]: vote } }
+let localRelated = []; // [{ faqIdA, faqIdB, linkedBy, note }]
 const DATA_FILE = path.join(__dirname, '..', 'src', 'faq-data.json');
 
 function loadLocalData() {
@@ -45,6 +47,24 @@ function loadLocalData() {
 loadLocalData();
 
 const useSheets = gsheets.isConfigured();
+
+async function logActivity(userId, action, targetId, details) {
+  try {
+    if (useSheets) {
+      await gsheets.addLog({ userId, action, targetId, details });
+    } else {
+      localLogs.unshift({
+        timestamp: new Date().toISOString(),
+        userId,
+        action,
+        targetId,
+        details,
+      });
+    }
+  } catch (err) {
+    console.error('Failed to log activity:', err.message);
+  }
+}
 if (useSheets) {
   console.log('✅ Google Sheets configured — attempting synchronization...');
   
@@ -172,6 +192,8 @@ app.post('/api/auth', async (req, res) => {
     if (user.pin !== pin) {
       return res.status(401).json({ success: false, error: 'Incorrect PIN. Please try again.' });
     }
+    // Log successful login
+    await logActivity(user.name || user.userId, 'LOGIN', user.userId, 'User logged in successfully');
     return res.json({ success: true, userId: user.userId, name: user.name });
   }
 
@@ -192,6 +214,8 @@ app.post('/api/auth', async (req, res) => {
       } else {
         saveUserLocal(user.userId, pin, email.trim().toLowerCase());
       }
+      // Log successful PIN setup
+      await logActivity(user.name || user.userId, 'SETUP_PIN', user.userId, `First-time login: set PIN and email (${email})`);
       return res.json({ success: true, userId: user.userId, name: user.name });
     } catch (err) {
       return res.status(500).json({ success: false, error: 'Failed to save PIN. Please try again.' });
@@ -301,6 +325,153 @@ app.delete('/api/faqs/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE /api/faqs error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== RATINGS =====
+
+// GET /api/ratings — aggregated rating data for all FAQs
+app.get('/api/ratings', async (req, res) => {
+  try {
+     if (useSheets) {
+       const ratings = await gsheets.getRatings();
+       return res.json(ratings);
+     }
+     // Local fallback: convert localRatings to aggregated format
+     const aggregated = {};
+     for (const [faqId, votes] of Object.entries(localRatings)) {
+       const voters = Object.entries(votes).map(([userId, vote]) => ({ userId, vote }));
+       const sum = voters.reduce((acc, v) => acc + v.vote, 0);
+       const total = voters.length;
+       const average = total > 0 ? parseFloat((sum / total).toFixed(1)) : 0;
+       aggregated[faqId] = { sum, total, average, voters };
+     }
+     res.json(aggregated);
+  } catch (err) {
+    console.error('GET /api/ratings error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/faqs/:id/rate — cast, update or cancel (vote=0) a rating
+app.post('/api/faqs/:id/rate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, vote } = req.body;
+    const userName = await resolveUserName(userId);
+
+    const numericVote = parseInt(vote, 10);
+    if (isNaN(numericVote) || numericVote < 0 || numericVote > 5) {
+      return res.status(400).json({ error: 'vote must be between 1 and 5, or 0 to cancel' });
+    }
+
+    if (useSheets) {
+      if (numericVote === 0) {
+        await gsheets.deleteRating(id, userName || userId);
+        await logActivity(userName || userId, 'CANCEL_RATE', id, 'Cancelled rating for FAQ');
+      } else {
+        await gsheets.upsertRating(id, userName || userId, numericVote);
+        await logActivity(userName || userId, 'RATE', id, `Rated FAQ: ${numericVote} Stars`);
+      }
+      // Return fresh aggregated ratings for this FAQ
+      const allRatings = await gsheets.getRatings();
+      return res.json(allRatings[id] || { sum: 0, total: 0, average: 0, voters: [] });
+    }
+    // Local fallback
+    if (!localRatings[id]) localRatings[id] = {};
+    if (numericVote === 0) {
+      delete localRatings[id][userName || userId];
+      await logActivity(userName || userId, 'CANCEL_RATE', id, 'Cancelled rating for FAQ');
+    } else {
+      localRatings[id][userName || userId] = numericVote;
+      await logActivity(userName || userId, 'RATE', id, `Rated FAQ: ${numericVote} Stars`);
+    }
+    const voters = Object.entries(localRatings[id]).map(([uid, v]) => ({ userId: uid, vote: v }));
+    const sum = voters.reduce((acc, v) => acc + v.vote, 0);
+    const total = voters.length;
+    const average = total > 0 ? parseFloat((sum / total).toFixed(1)) : 0;
+    res.json({ sum, total, average, voters });
+  } catch (err) {
+    console.error('POST /api/faqs/:id/rate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== RELATED FAQs =====
+
+// GET /api/related — all related links
+app.get('/api/related', async (req, res) => {
+  try {
+    if (useSheets) {
+      const related = await gsheets.getRelated();
+      return res.json(related);
+    }
+    res.json(localRelated);
+  } catch (err) {
+    console.error('GET /api/related error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/faqs/:id/related — link two FAQs
+app.post('/api/faqs/:id/related', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, relatedFaqId, note } = req.body;
+    const userName = await resolveUserName(userId);
+
+    if (!relatedFaqId || relatedFaqId === id) {
+      return res.status(400).json({ error: 'Invalid relatedFaqId' });
+    }
+
+    if (useSheets) {
+      const result = await gsheets.addRelated(id, relatedFaqId, userName || userId, note || '');
+      if (result.success) {
+        await logActivity(userName || userId, 'LINK_RELATED', id, `Linked FAQ with: ${relatedFaqId}`);
+      }
+      return res.json(result);
+    }
+    // Local fallback
+    const alreadyExists = localRelated.some(
+      r => (r.faqIdA === id && r.faqIdB === relatedFaqId) ||
+           (r.faqIdA === relatedFaqId && r.faqIdB === id)
+    );
+    if (alreadyExists) return res.json({ success: false, reason: 'already_exists' });
+    localRelated.push({ faqIdA: id, faqIdB: relatedFaqId, linkedBy: userName || userId, note: note || '', linkedAt: new Date().toISOString() });
+    await logActivity(userName || userId, 'LINK_RELATED', id, `Linked FAQ with: ${relatedFaqId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('POST /api/faqs/:id/related error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/faqs/:id/related/:relatedId — unlink two FAQs
+app.delete('/api/faqs/:id/related/:relatedId', async (req, res) => {
+  try {
+    const { id, relatedId } = req.params;
+    const { userId } = req.body || {}; // Attempt to capture userId if provided
+    const userName = userId ? await resolveUserName(userId) : 'System';
+
+    if (useSheets) {
+      const result = await gsheets.removeRelated(id, relatedId);
+      if (result.success) {
+        await logActivity(userName, 'UNLINK_RELATED', id, `Unlinked FAQ from: ${relatedId}`);
+      }
+      return res.json(result);
+    }
+    // Local fallback
+    const idx = localRelated.findIndex(
+      r => (r.faqIdA === id && r.faqIdB === relatedId) ||
+           (r.faqIdA === relatedId && r.faqIdB === id)
+    );
+    if (idx === -1) return res.json({ success: false });
+    localRelated.splice(idx, 1);
+    await logActivity(userName, 'UNLINK_RELATED', id, `Unlinked FAQ from: ${relatedId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /api/faqs/:id/related/:relatedId error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

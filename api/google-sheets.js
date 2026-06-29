@@ -14,6 +14,8 @@ const LOG_SHEET = 'Activity_Log';
 const DELETED_SHEET = 'Deleted';
 const CATEGORIES_SHEET = 'Categories';
 const USERS_SHEET = 'Users';
+const FAQ_RATINGS_SHEET = 'FAQ_Ratings';
+const FAQ_RELATED_SHEET = 'FAQ_Related';
 
 let sheets = null;
 
@@ -70,7 +72,7 @@ export async function initializeSheet(initialFaqs = []) {
     const meta = await client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
     const existingSheets = meta.data.sheets.map(s => s.properties.title);
     
-    const requiredSheets = [FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET];
+    const requiredSheets = [FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET, FAQ_RATINGS_SHEET, FAQ_RELATED_SHEET];
     const missingSheets = requiredSheets.filter(s => !existingSheets.includes(s));
 
     if (missingSheets.length > 0) {
@@ -269,6 +271,36 @@ export async function initializeSheet(initialFaqs = []) {
           });
         }
       }
+    }
+
+    // 7. Check FAQ_Ratings headers
+    const ratingsHeaderRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RATINGS_SHEET}!A1:D1`,
+    });
+    if (!ratingsHeaderRes.data.values || ratingsHeaderRes.data.values.length === 0) {
+      console.log('⭐ Initializing FAQ_Ratings headers...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${FAQ_RATINGS_SHEET}!A1:D1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['FaqID', 'UserID', 'Vote', 'RatedAt']] },
+      });
+    }
+
+    // 8. Check FAQ_Related headers
+    const relatedHeaderRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RELATED_SHEET}!A1:E1`,
+    });
+    if (!relatedHeaderRes.data.values || relatedHeaderRes.data.values.length === 0) {
+      console.log('🔗 Initializing FAQ_Related headers...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${FAQ_RELATED_SHEET}!A1:E1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['FaqID_A', 'FaqID_B', 'LinkedBy', 'LinkedAt', 'Note']] },
+      });
     }
   } catch (err) {
     console.error('❌ Google Sheets Initialization Error:', err.message);
@@ -669,4 +701,227 @@ export async function saveUserCredentials(userId, pin, email) {
     console.error('❌ Error saving user credentials:', err.message);
     throw err;
   }
+}
+
+// ===== RATINGS =====
+
+/**
+ * Fetch all rating rows from FAQ_Ratings and aggregate per FAQ.
+ * Returns: { [faqId]: { thumbsUp, thumbsDown, score, voters: [{userId, vote}] } }
+ */
+export async function getRatings() {
+  const client = await getSheetsClient();
+  if (!client) return {};
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RATINGS_SHEET}!A2:D`,
+    });
+    const rows = res.data.values || [];
+    const aggregated = {};
+    for (const row of rows) {
+      const faqId = row[0] || '';
+      const userId = row[1] || '';
+      const vote = parseInt(row[2], 10); // 1 to 5
+      if (!faqId || isNaN(vote) || vote < 1 || vote > 5) continue;
+      if (!aggregated[faqId]) {
+        aggregated[faqId] = { sum: 0, total: 0, average: 0, voters: [] };
+      }
+      aggregated[faqId].sum += vote;
+      aggregated[faqId].total++;
+      aggregated[faqId].average = parseFloat((aggregated[faqId].sum / aggregated[faqId].total).toFixed(1));
+      aggregated[faqId].voters.push({ userId, vote });
+    }
+    return aggregated;
+  } catch (err) {
+    console.error('❌ Error fetching ratings:', err.message);
+    return {};
+  }
+}
+
+/**
+ * Upsert a vote: if [faqId, userId] row exists, update Vote + RatedAt; else append.
+ * vote: 1 = helpful, -1 = not helpful
+ */
+export async function upsertRating(faqId, userId, vote) {
+  const client = await getSheetsClient();
+  if (!client) throw new Error('Google Sheets not configured');
+
+  const res = await client.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${FAQ_RATINGS_SHEET}!A:D`,
+  });
+  const rows = res.data.values || [];
+  const now = new Date().toISOString();
+
+  // Find existing row for this [faqId, userId]
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) { // skip header row (index 0)
+    if (rows[i][0] === faqId && rows[i][1] === userId) {
+      rowIndex = i + 1; // 1-based sheet row
+      break;
+    }
+  }
+
+  if (rowIndex !== -1) {
+    // Update existing row
+    await client.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RATINGS_SHEET}!C${rowIndex}:D${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[vote, now]] },
+    });
+    console.log(`⭐ Updated rating for FAQ ${faqId} by ${userId}: ${vote}`);
+  } else {
+    // Append new row
+    await client.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RATINGS_SHEET}!A:D`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[faqId, userId, vote, now]] },
+    });
+    console.log(`⭐ New rating for FAQ ${faqId} by ${userId}: ${vote}`);
+  }
+  return { success: true };
+}
+
+/**
+ * Delete a vote row when user cancels rating.
+ */
+export async function deleteRating(faqId, userId) {
+  const client = await getSheetsClient();
+  if (!client) throw new Error('Google Sheets not configured');
+
+  const res = await client.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${FAQ_RATINGS_SHEET}!A:B`,
+  });
+  const rows = res.data.values || [];
+  let rowIndex = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === faqId && rows[i][1] === userId) {
+      rowIndex = i; // 0-based
+      break;
+    }
+  }
+
+  if (rowIndex === -1) return { success: false };
+
+  const meta = await client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const sheet = meta.data.sheets.find(s => s.properties.title === FAQ_RATINGS_SHEET);
+  if (!sheet) throw new Error('Ratings sheet not found');
+
+  await client.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheet.properties.sheetId,
+            dimension: 'ROWS',
+            startIndex: rowIndex,
+            endIndex: rowIndex + 1,
+          },
+        },
+      }],
+    },
+  });
+
+  console.log(`⭐ Deleted rating for FAQ ${faqId} by ${userId}`);
+  return { success: true };
+}
+
+// ===== RELATED FAQs =====
+
+/**
+ * Fetch all related-link rows.
+ * Returns: [{ faqIdA, faqIdB, linkedBy, linkedAt, note }]
+ */
+export async function getRelated() {
+  const client = await getSheetsClient();
+  if (!client) return [];
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FAQ_RELATED_SHEET}!A2:E`,
+    });
+    const rows = res.data.values || [];
+    return rows
+      .filter(row => row[0] && row[1])
+      .map(row => ({
+        faqIdA: row[0],
+        faqIdB: row[1],
+        linkedBy: row[2] || '',
+        linkedAt: row[3] || '',
+        note: row[4] || '',
+      }));
+  } catch (err) {
+    console.error('❌ Error fetching related FAQs:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Add a related-link between two FAQs (bi-directional: stored once, resolved both ways).
+ */
+export async function addRelated(faqIdA, faqIdB, linkedBy, note = '') {
+  const client = await getSheetsClient();
+  if (!client) throw new Error('Google Sheets not configured');
+  const now = new Date().toISOString();
+  // Check if link already exists (in either direction)
+  const existing = await getRelated();
+  const alreadyExists = existing.some(
+    r => (r.faqIdA === faqIdA && r.faqIdB === faqIdB) ||
+         (r.faqIdA === faqIdB && r.faqIdB === faqIdA)
+  );
+  if (alreadyExists) return { success: false, reason: 'already_exists' };
+
+  await client.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${FAQ_RELATED_SHEET}!A:E`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[faqIdA, faqIdB, linkedBy, now, note]] },
+  });
+  console.log(`🔗 Linked FAQ ${faqIdA} <-> ${faqIdB} by ${linkedBy}`);
+  return { success: true };
+}
+
+/**
+ * Remove a related-link between two FAQs (checks both directions).
+ */
+export async function removeRelated(faqIdA, faqIdB) {
+  const client = await getSheetsClient();
+  if (!client) throw new Error('Google Sheets not configured');
+
+  const res = await client.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${FAQ_RELATED_SHEET}!A:B`,
+  });
+  const rows = res.data.values || [];
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i][0]; const b = rows[i][1];
+    if ((a === faqIdA && b === faqIdB) || (a === faqIdB && b === faqIdA)) {
+      rowIndex = i; // 0-based
+      break;
+    }
+  }
+  if (rowIndex === -1) return { success: false };
+
+  const meta = await client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const sheet = meta.data.sheets.find(s => s.properties.title === FAQ_RELATED_SHEET);
+  await client.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [{ deleteDimension: { range: {
+        sheetId: sheet.properties.sheetId,
+        dimension: 'ROWS',
+        startIndex: rowIndex,
+        endIndex: rowIndex + 1,
+      }}}],
+    },
+  });
+  console.log(`🔗 Unlinked FAQ ${faqIdA} <-> ${faqIdB}`);
+  return { success: true };
 }
