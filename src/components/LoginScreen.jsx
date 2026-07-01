@@ -163,7 +163,6 @@ export default function LoginScreen({ onLogin }) {
         {step === 'pin_verify' && resolvedUser && (
           <>
             <div className="pin-step-header">
-              <div className="pin-icon-wrap"><FiLock size={24} /></div>
               <h1>Enter PIN</h1>
               <p>Welcome back, <strong>{resolvedUser.name}</strong>!<br />Enter your 6-digit PIN to continue.</p>
             </div>
@@ -210,7 +209,6 @@ export default function LoginScreen({ onLogin }) {
         {step === 'pin_setup' && resolvedUser && (
           <>
             <div className="pin-step-header">
-              <div className="pin-icon-wrap setup"><FiShield size={24} /></div>
               <h1>Set Up PIN</h1>
               <p>Hi <strong>{resolvedUser.name}</strong>! Create your 6-digit PIN and register your Privy email for account security.</p>
             </div>
