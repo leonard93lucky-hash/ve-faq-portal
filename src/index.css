@@ -1373,6 +1373,25 @@ textarea.input-field { resize: vertical; min-height: 100px; line-height: 1.6; }
   padding-right: 0.25rem;
 }
 
+/* Visible scrollbar for sent history */
+.q-logs-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.q-logs-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.q-logs-list::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+.q-logs-list::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
 .no-q-logs {
   display: flex;
   flex-direction: column;

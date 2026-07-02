@@ -78,7 +78,7 @@ export async function initializeSheet(initialFaqs = []) {
     
     const requiredSheets = [
       FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET, FAQ_RATINGS_SHEET, FAQ_RELATED_SHEET,
-      OFFICERS_SHEET, QUESTIONNAIRE_TEMPLATES_SHEET, QUESTIONNAIRE_LOGS_SHEET, QUESTIONNAIRE_SUBMISSIONS_SHEET
+      QUESTIONNAIRE_TEMPLATES_SHEET, QUESTIONNAIRE_LOGS_SHEET, QUESTIONNAIRE_SUBMISSIONS_SHEET
     ];
     const missingSheets = requiredSheets.filter(s => !existingSheets.includes(s));
 
@@ -278,38 +278,7 @@ export async function initializeSheet(initialFaqs = []) {
       }
     }
 
-    // 9. Check Officers sheet
-    const officersListRes = await client.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${OFFICERS_SHEET}!A1:A1`,
-    }).catch(() => null);
-
-    if (!officersListRes || !officersListRes.data.values || officersListRes.data.values.length === 0) {
-      console.log('👷 Initializing Officers sheet...');
-      await client.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${OFFICERS_SHEET}!A1`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [['OfficerID', 'OfficerName', 'OfficerEmail']],
-        },
-      });
-      // Add default officers
-      const defaults = [
-        ['OFF-01', 'Kenny Chandra', 'kenny@privy.id'],
-        ['OFF-02', 'Fitriana Diah', 'fitriana@privy.id'],
-        ['OFF-03', 'Anindita Lola Rizka', 'lola@privy.id'],
-        ['OFF-04', 'Rizki Aji Pramono', 'rizki@privy.id'],
-      ];
-      await client.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${OFFICERS_SHEET}!A2`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: defaults },
-      });
-    }
-
-    // 10. Check Questionnaire_Templates sheet
+    // 9. Check Questionnaire_Templates sheet
     const templatesRes = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${QUESTIONNAIRE_TEMPLATES_SHEET}!A1:A1`,
@@ -372,7 +341,7 @@ export async function initializeSheet(initialFaqs = []) {
         range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [['SubmissionID', 'LogID', 'ReceiverEmail', 'OfficerName', 'Category', 'Q1_Rating', 'Q2_Rating', 'Q3_Rating', 'Q4_Rating', 'Q5_Rating', 'AnswersJSON', 'Advice', 'SubmittedAt']],
+          values: [['SubmissionID', 'LogID', 'ReceiverEmail', 'OfficerName', 'Category', 'Q1_Rating', 'Q2_Rating', 'Q3_Rating', 'Q4_Rating', 'Q5_Rating', 'AnswersJSON', 'Advice', 'SubmittedAt', 'SenderName']],
         },
       });
     }
@@ -408,6 +377,77 @@ export async function initializeSheet(initialFaqs = []) {
     }
   } catch (err) {
     console.error('❌ Google Sheets Initialization Error:', err.message);
+  }
+}
+
+// ===== MIGRATION: Backfill SenderName for existing submissions =====
+export async function backfillSenderNames() {
+  const client = await getSheetsClient();
+  if (!client) return;
+  
+  try {
+    console.log('🔄 Checking for submissions missing SenderName...');
+    
+    // Get all submissions
+    const submissionsRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A2:N`,
+    });
+    const submissionRows = submissionsRes.data.values || [];
+    
+    // Get all logs
+    const logsRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A2:H`,
+    });
+    const logsRows = logsRes.data.values || [];
+    
+    // Create a map of logId -> senderName
+    const logsMap = {};
+    logsRows.forEach(logRow => {
+      const logId = logRow[0] || '';
+      const senderName = logRow[2] || '';
+      if (logId) {
+        logsMap[logId] = senderName;
+      }
+    });
+    
+    // Find submissions that need updating (missing or empty SenderName in column N)
+    const updates = [];
+    submissionRows.forEach((row, index) => {
+      const logId = row[1] || '';
+      const currentSenderName = row[13] || ''; // Column N
+      
+      // If SenderName is missing and we have a logId with a matching sender
+      if (!currentSenderName && logId && logsMap[logId]) {
+        updates.push({
+          rowIndex: index + 2, // +2 because sheet is 1-indexed and we start at row 2
+          senderName: logsMap[logId]
+        });
+      }
+    });
+    
+    if (updates.length > 0) {
+      console.log(`📝 Updating ${updates.length} submissions with missing SenderName...`);
+      
+      // Update each row
+      for (const update of updates) {
+        await client.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!N${update.rowIndex}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [[update.senderName]],
+          },
+        });
+      }
+      
+      console.log(`✅ Successfully backfilled ${updates.length} SenderName values`);
+    } else {
+      console.log('✅ All submissions already have SenderName populated');
+    }
+  } catch (err) {
+    console.error('❌ Error backfilling SenderNames:', err.message);
   }
 }
 
@@ -1045,16 +1085,24 @@ export async function getOfficers() {
     ];
   }
   try {
+    // Read from Users sheet and filter by position="Officer"
     const res = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${OFFICERS_SHEET}!A2:C`,
+      range: `${USERS_SHEET}!A2:E`,
     });
     const rows = res.data.values || [];
-    return rows.map(row => ({
-      id: row[0] || '',
-      name: row[1] || '',
-      email: row[2] || '',
-    }));
+    const officers = rows
+      .filter(row => {
+        const position = (row[4] || '').trim().toLowerCase();
+        return position === 'officer';
+      })
+      .map(row => ({
+        id: row[0] || '',
+        name: row[1] || '',
+        email: row[3] || '',
+      }));
+    console.log(`👷 Found ${officers.length} officers from Users sheet`);
+    return officers;
   } catch (err) {
     console.error('Error fetching officers:', err.message);
     return [];
@@ -1209,10 +1257,28 @@ export async function submitQuestionnaire(sub) {
   const client = await getSheetsClient();
   if (!client) return { success: true };
   try {
+    // Look up sender name from Questionnaire_Logs if logId is provided
+    let senderName = '';
+    if (sub.logId) {
+      try {
+        const logsRes = await client.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${QUESTIONNAIRE_LOGS_SHEET}!A2:H`,
+        });
+        const logsRows = logsRes.data.values || [];
+        const logRow = logsRows.find(row => row[0] === sub.logId);
+        if (logRow) {
+          senderName = logRow[2] || ''; // Column C is SenderName
+        }
+      } catch (err) {
+        console.error('Error looking up sender name:', err.message);
+      }
+    }
+    
     // Append to Questionnaire_Submissions
     await client.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A:M`,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A:N`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[
@@ -1229,6 +1295,7 @@ export async function submitQuestionnaire(sub) {
           sub.answersJson || '',
           sub.advice || '',
           sub.submittedAt || new Date().toISOString(),
+          senderName,
         ]],
       },
     });
@@ -1247,11 +1314,30 @@ export async function getSubmissions(officerName = null, dateFrom = null, dateTo
   const client = await getSheetsClient();
   if (!client) return [];
   try {
+    // Fetch submissions
     const res = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A2:M`,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A2:N`,
     });
     const rows = res.data.values || [];
+    
+    // Fetch logs to join with submissions
+    const logsRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A2:H`,
+    });
+    const logsRows = logsRes.data.values || [];
+    
+    // Create a map: logId -> senderName
+    const logMap = {};
+    logsRows.forEach(logRow => {
+      const logId = logRow[0];
+      const senderName = logRow[2];
+      if (logId) {
+        logMap[logId] = senderName || 'Unknown';
+      }
+    });
+    
     const submissions = rows.map(row => {
       const ratings = [row[5], row[6], row[7], row[8], row[9]]
         .map(v => parseFloat(v))
@@ -1259,9 +1345,13 @@ export async function getSubmissions(officerName = null, dateFrom = null, dateTo
       const avgScore = ratings.length > 0
         ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)
         : null;
+      
+      const logId = row[1] || '';
+      const senderName = logId && logMap[logId] ? logMap[logId] : 'Unknown';
+      
       return {
         submissionId: row[0] || '',
-        logId: row[1] || '',
+        logId: logId,
         receiverEmail: row[2] || '',
         officerName: row[3] || '',
         category: row[4] || '',
@@ -1272,6 +1362,7 @@ export async function getSubmissions(officerName = null, dateFrom = null, dateTo
         answersJson: row[10] || '',
         advice: row[11] || '',
         submittedAt: row[12] || '',
+        senderName: senderName,
         avgScore,
       };
     });

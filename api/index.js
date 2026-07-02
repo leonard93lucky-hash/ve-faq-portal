@@ -114,6 +114,12 @@ if (useSheets) {
       } catch (err) {
         console.error('Failed to sync users at startup:', err.message);
       }
+      // Run migration to backfill SenderName for existing submissions
+      try {
+        await gsheets.backfillSenderNames();
+      } catch (err) {
+        console.error('Failed to backfill SenderNames:', err.message);
+      }
     })
     .catch(err => {
       clearTimeout(initTimeout);

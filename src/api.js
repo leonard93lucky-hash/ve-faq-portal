@@ -235,8 +235,11 @@ export async function sendQuestionnaire(payload) {
   return { success: true, logId: mockLog.logId, link };
 }
 
-export async function fetchQuestionnaireLogs(senderId) {
-  const data = await request(`/questionnaires/logs?senderId=${senderId}`);
+export async function fetchQuestionnaireLogs(senderId = '') {
+  const url = senderId 
+    ? `/questionnaires/logs?senderId=${senderId}`
+    : '/questionnaires/logs';
+  const data = await request(url);
   if (data) return data;
 
   // Mock implementation

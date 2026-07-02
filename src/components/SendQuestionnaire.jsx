@@ -26,7 +26,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
       const [officersList, questionsList, logList] = await Promise.all([
         fetchOfficers(),
         fetchQuestionnaireQuestions(),
-        fetchQuestionnaireLogs(userId),
+        fetchQuestionnaireLogs(), // Remove userId to fetch ALL logs
       ]);
       setOfficers(officersList);
       setAllQuestions(questionsList);
@@ -37,7 +37,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
     } finally {
       setLoading(false);
     }
-  }, [userId, showToast]);
+  }, [showToast]); // Remove userId from dependencies
 
   // Filter states
   const [selectedOfficerFilter, setSelectedOfficerFilter] = useState('');
@@ -110,6 +110,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
       'Submission ID',
       'Officer Name',
       'Receiver Email',
+      'Sent By',
       'Q1 Rating',
       'Q2 Rating',
       'Q3 Rating',
@@ -127,6 +128,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
         `"${sub.submissionId || ''}"`,
         `"${sub.officerName || ''}"`,
         `"${sub.receiverEmail || ''}"`,
+        `"${sub.senderName || 'Unknown'}"`,
         sub.ratings?.Q1 || '',
         sub.ratings?.Q2 || '',
         sub.ratings?.Q3 || '',
@@ -171,7 +173,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
   const handleRefreshLogs = async () => {
     setRefreshingLogs(true);
     try {
-      const logList = await fetchQuestionnaireLogs(userId);
+      const logList = await fetchQuestionnaireLogs(); // Remove userId to fetch ALL logs
       setLogs(logList);
       showToast('Logs refreshed.');
     } catch (err) {
@@ -212,7 +214,7 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
         setLastSentLink(result.link);
         setReceiverEmail('');
         setSelectedOfficer('');
-        const logList = await fetchQuestionnaireLogs(userId);
+        const logList = await fetchQuestionnaireLogs(); // Remove userId to fetch ALL logs
         setLogs(logList);
       } else {
         showToast('Failed to send questionnaire.', 'error');
@@ -410,7 +412,9 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
                       <div className="q-log-info">
                         <div className="q-log-receiver"><strong>{log.receiverEmail}</strong></div>
                         <div className="q-log-meta">
-                          Officer: <span>{log.officerName}</span> | <span>{new Date(log.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          Sent by: <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{log.senderName}</span> | 
+                          Officer: <span>{log.officerName}</span> | 
+                          <span>{new Date(log.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
                         <div className="q-log-category">{questionCount}</div>
                       </div>
@@ -523,6 +527,10 @@ export default function SendQuestionnaire({ userId, userName, onBack, showToast 
                       <div className="q-result-email">
                         <FiMail style={{ marginRight: '0.4rem', color: 'var(--text-muted)' }} />
                         {sub.receiverEmail}
+                      </div>
+                      <div className="q-result-time">
+                        <FiSend style={{ marginRight: '0.4rem', color: 'var(--text-muted)' }} />
+                        Sent by: <strong style={{ color: 'var(--primary)', marginLeft: '0.25rem' }}>{sub.senderName || 'Unknown'}</strong>
                       </div>
                       <div className="q-result-time">
                         <FiClock style={{ marginRight: '0.4rem', color: 'var(--text-muted)' }} />

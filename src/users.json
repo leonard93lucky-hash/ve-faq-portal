@@ -1,12 +1,12 @@
 {
   "PX2420": { "name": "Kenny Chandra", "pin": "123456", "email": "kenny@privy.id", "position": "Manager" },
-  "ZZR9840": "Zara Zafira",
-  "FDA3599": "Fitriana Diah",
-  "AU3508": "Agausilia Dinda Asmara",
-  "ALR8801": "Anindita Lola Rizka",
-  "SZ8501": "Rembulan Selaras",
-  "RIZK72": "Rizki Aji Pramono",
+  "ZZR9840": { "name": "Zara Zafira", "pin": "", "email": "", "position": "Manager" },
+  "FDA3599": { "name": "Fitriana Diah", "pin": "", "email": "", "position": "Manager" },
+  "AU3508": { "name": "Agausilia Dinda Asmara", "pin": "", "email": "", "position": "Officer" },
+  "ALR8801": { "name": "Anindita Lola Rizka", "pin": "", "email": "", "position": "Officer" },
+  "SZ8501": { "name": "Rembulan Selaras", "pin": "", "email": "", "position": "Manager" },
+  "RIZK72": { "name": "Rizki Aji Pramono", "pin": "", "email": "", "position": "Officer" },
   "LC3357": { "name": "Lucky Leonard", "pin": "123456", "email": "lucky.leonard@privy.id", "position": "VP" },
-  "KA3989": "Ika Ambarwati",
-  "SUN4662": "Sungguh Indra Malaon"
+  "KA3989": { "name": "Ika Ambarwati", "pin": "", "email": "", "position": "Manager" },
+  "SUN4662": { "name": "Sungguh Indra Malaon", "pin": "", "email": "", "position": "VP" }
 }
