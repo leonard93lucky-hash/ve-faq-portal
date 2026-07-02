@@ -6,6 +6,8 @@ import ActivityLog from './components/ActivityLog.jsx';
 import StatsDashboard from './components/StatsDashboard.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import Toast from './components/Toast.jsx';
+import SendQuestionnaire from './components/SendQuestionnaire.jsx';
+import ClientQuestionnaire from './components/ClientQuestionnaire.jsx';
 import { 
   fetchFAQs, addFAQ, updateFAQ, deleteFAQ, fetchLogs, 
   fetchCategories, addCategory, deleteCategory,
@@ -17,6 +19,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState('');
   const [userName, setUserName] = useState('');
+  const [userPosition, setUserPosition] = useState('');
 
   // Data state
   const [faqs, setFaqs] = useState([]);
@@ -27,6 +30,7 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   // UI state
+  const [currentScreen, setCurrentScreen] = useState('faq'); // 'faq' | 'send-questionnaire'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFaq, setEditingFaq] = useState(null);
   const [deletingFaq, setDeletingFaq] = useState(null);
@@ -34,9 +38,9 @@ function App() {
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const showToast = (message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
-  };
+  }, []);
 
   // Load data
   const loadData = useCallback(async () => {
@@ -69,7 +73,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [userId, userName]);
+  }, [userId, userName, showToast]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -82,6 +86,7 @@ function App() {
   const handleLogin = (result) => {
     setUserId(result.userId);
     setUserName(result.name);
+    setUserPosition(result.position || '');
     setIsAuthenticated(true);
   };
 
@@ -89,6 +94,8 @@ function App() {
     setIsAuthenticated(false);
     setUserId('');
     setUserName('');
+    setUserPosition('');
+    setCurrentScreen('faq');
     setFaqs([]);
     setLogs([]);
     setRatings({});
@@ -190,10 +197,54 @@ function App() {
   };
 
   // --- Render ---
+  
+  // Public-facing route: Client evaluation form
+  if (window.location.pathname === '/privy-officer-performance-questionnaire') {
+    return (
+      <>
+        <ClientQuestionnaire />
+        <Toast toast={toast} onDismiss={() => setToast(null)} />
+      </>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <>
         <LoginScreen onLogin={handleLogin} />
+        <Toast toast={toast} onDismiss={() => setToast(null)} />
+      </>
+    );
+  }
+
+  if (currentScreen === 'send-questionnaire') {
+    const role = (userPosition || '').toLowerCase();
+    const isAuthorized = role.includes('vp') || role.includes('manager');
+
+    if (!isAuthorized) {
+      return (
+        <div className="client-q-wrapper animate-fade-in">
+          <div className="client-q-card glass text-center">
+            <h2 style={{ color: 'var(--primary)' }}>Access Denied</h2>
+            <p style={{ margin: '1rem 0', color: 'var(--text-muted)' }}>
+              Only VPs and Managers have permission to access the Send Questionnaire page.
+            </p>
+            <button className="btn-primary" style={{ padding: '0.75rem 1.5rem', marginTop: '1rem', border: 'none', borderRadius: '6px', cursor: 'pointer' }} onClick={() => setCurrentScreen('faq')}>
+              Go to Portal
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <SendQuestionnaire 
+          userId={userId} 
+          userName={userName} 
+          onBack={() => setCurrentScreen('faq')} 
+          showToast={showToast} 
+        />
         <Toast toast={toast} onDismiss={() => setToast(null)} />
       </>
     );
@@ -205,6 +256,7 @@ function App() {
         faqs={faqs}
         userName={userName}
         userId={userId}
+        userPosition={userPosition}
         categories={categories}
         ratings={ratings}
         related={related}
@@ -213,6 +265,7 @@ function App() {
         onDelete={handleDeleteFaq}
         onShowLogs={() => setIsLogOpen(true)}
         onShowStats={() => setIsStatsOpen(true)}
+        onShowQuestionnaire={() => setCurrentScreen('send-questionnaire')}
         onLogout={handleLogout}
         logCount={logs.length}
         onRefresh={loadData}

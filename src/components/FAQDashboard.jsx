@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   FiSearch, FiPlus, FiChevronDown, FiEdit2, FiTrash2,
   FiClock, FiLogOut, FiUser, FiFilter, FiX, FiRefreshCw,
-  FiArrowUp, FiArrowDown, FiAward, FiStar, FiLink, FiAlertTriangle, FiTrendingUp
+  FiArrowUp, FiArrowDown, FiAward, FiStar, FiLink, FiAlertTriangle, FiTrendingUp, FiFileText
 } from 'react-icons/fi';
 
 // Default category list as fallback
@@ -34,6 +34,7 @@ export default function FAQDashboard({
   onDelete,
   onShowLogs,
   onShowStats,
+  onShowQuestionnaire,
   onLogout,
   logCount,
   onRefresh,
@@ -41,6 +42,7 @@ export default function FAQDashboard({
   onRate,
   onAddRelated,
   onRemoveRelated,
+  userPosition,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -249,6 +251,11 @@ export default function FAQDashboard({
             <FiClock /><span>Activity Log</span>
             {logCount > 0 && <span className="log-badge-count">{logCount}</span>}
           </button>
+          {((userPosition || '').toLowerCase().includes('vp') || (userPosition || '').toLowerCase().includes('manager')) && (
+            <button className="icon-btn-text" onClick={onShowQuestionnaire} id="show-questionnaire-btn">
+              <FiFileText /><span>Questionnaire</span>
+            </button>
+          )}
           <button className="icon-btn" onClick={onRefresh} disabled={isLoading} title="Refresh Data" id="refresh-data-btn">
             <FiRefreshCw className={isLoading ? 'spin' : ''} />
           </button>

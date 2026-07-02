@@ -80,7 +80,7 @@ export default function LoginScreen({ onLogin }) {
     try {
       const data = await login(resolvedUser.userId, pinValue);
       if (data.success) {
-        onLogin({ userId: data.userId, name: data.name });
+        onLogin(data);
       } else {
         setError(data.error || 'Incorrect PIN.');
         setPinDigits(['', '', '', '', '', '']);
@@ -106,7 +106,7 @@ export default function LoginScreen({ onLogin }) {
     try {
       const data = await login(resolvedUser.userId, pinValue, email.trim().toLowerCase());
       if (data.success) {
-        onLogin({ userId: data.userId, name: data.name });
+        onLogin(data);
       } else {
         setError(data.error || 'Setup failed. Please try again.');
       }

@@ -16,6 +16,10 @@ const CATEGORIES_SHEET = 'Categories';
 const USERS_SHEET = 'Users';
 const FAQ_RATINGS_SHEET = 'FAQ_Ratings';
 const FAQ_RELATED_SHEET = 'FAQ_Related';
+const OFFICERS_SHEET = 'Officers';
+const QUESTIONNAIRE_TEMPLATES_SHEET = 'Questionnaire_Templates';
+const QUESTIONNAIRE_LOGS_SHEET = 'Questionnaire_Logs';
+const QUESTIONNAIRE_SUBMISSIONS_SHEET = 'Questionnaire_Submissions';
 
 let sheets = null;
 
@@ -72,7 +76,10 @@ export async function initializeSheet(initialFaqs = []) {
     const meta = await client.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
     const existingSheets = meta.data.sheets.map(s => s.properties.title);
     
-    const requiredSheets = [FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET, FAQ_RATINGS_SHEET, FAQ_RELATED_SHEET];
+    const requiredSheets = [
+      FAQ_SHEET, LOG_SHEET, DELETED_SHEET, CATEGORIES_SHEET, USERS_SHEET, FAQ_RATINGS_SHEET, FAQ_RELATED_SHEET,
+      OFFICERS_SHEET, QUESTIONNAIRE_TEMPLATES_SHEET, QUESTIONNAIRE_LOGS_SHEET, QUESTIONNAIRE_SUBMISSIONS_SHEET
+    ];
     const missingSheets = requiredSheets.filter(s => !existingSheets.includes(s));
 
     if (missingSheets.length > 0) {
@@ -228,7 +235,7 @@ export async function initializeSheet(initialFaqs = []) {
         range: `${USERS_SHEET}!A1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [['UserID', 'UserName', 'PIN', 'Email']],
+          values: [['UserID', 'UserName', 'PIN', 'Email', 'Position']],
         },
       });
       // Try to load initial users from users.json to populate the sheet
@@ -236,7 +243,13 @@ export async function initializeSheet(initialFaqs = []) {
         const USERS_FILE = path.join(__dirname, '..', 'src', 'users.json');
         if (fs.existsSync(USERS_FILE)) {
           const defaultUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-          const userRows = Object.entries(defaultUsers).map(([userId, userName]) => [userId, userName, '', '']);
+          const userRows = Object.entries(defaultUsers).map(([userId, val]) => {
+            if (typeof val === 'string') {
+              return [userId, val, '', '', ''];
+            } else {
+              return [userId, val.name || '', val.pin || '', val.email || '', val.position || ''];
+            }
+          });
           if (userRows.length > 0) {
             console.log(`📤 Uploading ${userRows.length} initial users to Google Sheets...`);
             await client.spreadsheets.values.append({
@@ -251,26 +264,117 @@ export async function initializeSheet(initialFaqs = []) {
         console.warn('⚠️ Could not populate Users sheet from users.json fallback:', jsonErr.message);
       }
     } else {
-      // Ensure the header includes PIN and Email columns if missing (for existing sheets)
+      // Ensure the header includes PIN, Email, and Position columns if missing (for existing sheets)
       const currentHeaders = usersListRes.data.values[0] || [];
-      if (!currentHeaders.includes('PIN')) {
-        console.log('🔧 Adding PIN and Email headers to Users sheet...');
-        const fullHeadersRes = await client.spreadsheets.values.get({
+      if (!currentHeaders.includes('PIN') || !currentHeaders.includes('Position')) {
+        console.log('🔧 Adding PIN, Email, and Position headers to Users sheet...');
+        const newHeaders = ['UserID', 'UserName', 'PIN', 'Email', 'Position'];
+        await client.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${USERS_SHEET}!A1:D1`,
+          range: `${USERS_SHEET}!A1:E1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [newHeaders] },
         });
-        const existingHeaders = fullHeadersRes.data.values?.[0] || [];
-        const newHeaders = ['UserID', 'UserName', 'PIN', 'Email'];
-        // Only update if needed
-        if (JSON.stringify(existingHeaders) !== JSON.stringify(newHeaders)) {
-          await client.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${USERS_SHEET}!A1:D1`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [newHeaders] },
-          });
-        }
       }
+    }
+
+    // 9. Check Officers sheet
+    const officersListRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${OFFICERS_SHEET}!A1:A1`,
+    }).catch(() => null);
+
+    if (!officersListRes || !officersListRes.data.values || officersListRes.data.values.length === 0) {
+      console.log('👷 Initializing Officers sheet...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${OFFICERS_SHEET}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['OfficerID', 'OfficerName', 'OfficerEmail']],
+        },
+      });
+      // Add default officers
+      const defaults = [
+        ['OFF-01', 'Kenny Chandra', 'kenny@privy.id'],
+        ['OFF-02', 'Fitriana Diah', 'fitriana@privy.id'],
+        ['OFF-03', 'Anindita Lola Rizka', 'lola@privy.id'],
+        ['OFF-04', 'Rizki Aji Pramono', 'rizki@privy.id'],
+      ];
+      await client.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${OFFICERS_SHEET}!A2`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: defaults },
+      });
+    }
+
+    // 10. Check Questionnaire_Templates sheet
+    const templatesRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_TEMPLATES_SHEET}!A1:A1`,
+    }).catch(() => null);
+
+    if (!templatesRes || !templatesRes.data.values || templatesRes.data.values.length === 0) {
+      console.log('📝 Initializing Questionnaire Templates sheet...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${QUESTIONNAIRE_TEMPLATES_SHEET}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['QuestionID', 'Category', 'QuestionText', 'Order']],
+        },
+      });
+      // Add initial 5 questions
+      const defaults = [
+        ['Q1', 'Privy Integration Officer Performance Questionnaire', 'The integration team clearly explained the integration process and technical requirements', 1],
+        ['Q2', 'Privy Integration Officer Performance Questionnaire', 'The proposed solution met our business and technical needs.', 2],
+        ['Q3', 'Privy Integration Officer Performance Questionnaire', 'The integration team provided timely and helpful support throughout the integration process.', 3],
+        ['Q4', 'Privy Integration Officer Performance Questionnaire', 'Communication from the integration team was clear, responsive, and easy to understand', 4],
+        ['Q5', 'Privy Integration Officer Performance Questionnaire', 'Overall, we are satisfied with the support and collaboration provided by the integration team during the integration project.', 5],
+      ];
+      await client.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${QUESTIONNAIRE_TEMPLATES_SHEET}!A2`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: defaults },
+      });
+    }
+
+    // 11. Check Questionnaire_Logs sheet
+    const qLogsRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A1:A1`,
+    }).catch(() => null);
+
+    if (!qLogsRes || !qLogsRes.data.values || qLogsRes.data.values.length === 0) {
+      console.log('📜 Initializing Questionnaire Logs sheet...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${QUESTIONNAIRE_LOGS_SHEET}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['LogID', 'SenderID', 'SenderName', 'ReceiverEmail', 'OfficerName', 'Category', 'SentAt', 'Status']],
+        },
+      });
+    }
+
+    // 12. Check Questionnaire_Submissions sheet
+    const qSubsRes = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A1:A1`,
+    }).catch(() => null);
+
+    if (!qSubsRes || !qSubsRes.data.values || qSubsRes.data.values.length === 0) {
+      console.log('📥 Initializing Questionnaire Submissions sheet...');
+      await client.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['SubmissionID', 'LogID', 'ReceiverEmail', 'OfficerName', 'Category', 'Q1_Rating', 'Q2_Rating', 'Q3_Rating', 'Q4_Rating', 'Q5_Rating', 'AnswersJSON', 'Advice', 'SubmittedAt']],
+        },
+      });
     }
 
     // 7. Check FAQ_Ratings headers
@@ -653,7 +757,7 @@ export async function getUsers() {
   try {
     const res = await client.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${USERS_SHEET}!A2:D`,
+      range: `${USERS_SHEET}!A2:E`,
     });
     const rows = res.data.values || [];
     const userMap = {};
@@ -663,6 +767,7 @@ export async function getUsers() {
           name: row[1] ? row[1].trim() : '',
           pin: row[2] ? row[2].trim() : '',
           email: row[3] ? row[3].trim().toLowerCase() : '',
+          position: row[4] ? row[4].trim() : '',
         };
       }
     }
@@ -925,3 +1030,280 @@ export async function removeRelated(faqIdA, faqIdB) {
   console.log(`🔗 Unlinked FAQ ${faqIdA} <-> ${faqIdB}`);
   return { success: true };
 }
+
+// ===== QUESTIONNAIRE FUNCTIONS =====
+
+export async function getOfficers() {
+  const client = await getSheetsClient();
+  if (!client) {
+    // Local mock officers fallback
+    return [
+      { id: 'OFF-01', name: 'Kenny Chandra', email: 'kenny@privy.id' },
+      { id: 'OFF-02', name: 'Fitriana Diah', email: 'fitriana@privy.id' },
+      { id: 'OFF-03', name: 'Anindita Lola Rizka', email: 'lola@privy.id' },
+      { id: 'OFF-04', name: 'Rizki Aji Pramono', email: 'rizki@privy.id' },
+    ];
+  }
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${OFFICERS_SHEET}!A2:C`,
+    });
+    const rows = res.data.values || [];
+    return rows.map(row => ({
+      id: row[0] || '',
+      name: row[1] || '',
+      email: row[2] || '',
+    }));
+  } catch (err) {
+    console.error('Error fetching officers:', err.message);
+    return [];
+  }
+}
+
+export async function getQuestionnaireQuestions(category) {
+  const client = await getSheetsClient();
+  const defaultQuestions = [
+    { id: 'Q1', category: 'Privy Integration Officer Performance Questionnaire', questionText: 'The integration team clearly explained the integration process and technical requirements', order: 1 },
+    { id: 'Q2', category: 'Privy Integration Officer Performance Questionnaire', questionText: 'The proposed solution met our business and technical needs.', order: 2 },
+    { id: 'Q3', category: 'Privy Integration Officer Performance Questionnaire', questionText: 'The integration team provided timely and helpful support throughout the integration process.', order: 3 },
+    { id: 'Q4', category: 'Privy Integration Officer Performance Questionnaire', questionText: 'Communication from the integration team was clear, responsive, and easy to understand', order: 4 },
+    { id: 'Q5', category: 'Privy Integration Officer Performance Questionnaire', questionText: 'Overall, we are satisfied with the support and collaboration provided by the integration team during the integration project.', order: 5 },
+  ];
+  if (!client) {
+    return category ? defaultQuestions.filter(q => q.category === category) : defaultQuestions;
+  }
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_TEMPLATES_SHEET}!A2:D`,
+    });
+    const rows = res.data.values || [];
+    const questions = rows.map(row => ({
+      id: row[0] || '',
+      category: row[1] || '',
+      questionText: row[2] || '',
+      order: parseInt(row[3], 10) || 0,
+    }));
+    return category ? questions.filter(q => q.category === category) : questions;
+  } catch (err) {
+    console.error('Error fetching templates:', err.message);
+    return defaultQuestions;
+  }
+}
+
+export async function getQuestionnaireLogs(senderId = null) {
+  const client = await getSheetsClient();
+  if (!client) return [];
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A2:H`,
+    });
+    const rows = res.data.values || [];
+    const logs = rows.map(row => ({
+      logId: row[0] || '',
+      senderId: row[1] || '',
+      senderName: row[2] || '',
+      receiverEmail: row[3] || '',
+      officerName: row[4] || '',
+      category: row[5] || '',
+      sentAt: row[6] || '',
+      status: row[7] || '',
+    }));
+    return senderId ? logs.filter(l => l.senderId.toUpperCase() === senderId.toUpperCase()) : logs;
+  } catch (err) {
+    console.error('Error fetching questionnaire logs:', err.message);
+    return [];
+  }
+}
+
+export async function addQuestionnaireLog(log) {
+  const client = await getSheetsClient();
+  if (!client) return { success: true };
+  try {
+    await client.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A:H`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[
+          log.logId,
+          log.senderId || '',
+          log.senderName || '',
+          log.receiverEmail || '',
+          log.officerName || '',
+          log.category || '',
+          log.sentAt || new Date().toISOString(),
+          log.status || 'Sent',
+        ]],
+      },
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Error logging questionnaire send:', err.message);
+    throw err;
+  }
+}
+
+export async function updateQuestionnaireLogStatus(logId, status) {
+  const client = await getSheetsClient();
+  if (!client) return { success: true };
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A:A`,
+    });
+    const rows = res.data.values || [];
+    let rowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === logId) {
+        rowIndex = i + 1; // 1-based
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('Questionnaire log not found');
+    await client.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!H${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[status]],
+      },
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Error updating questionnaire log status:', err.message);
+    throw err;
+  }
+}
+
+export async function getQuestionnaireLogById(logId) {
+  const client = await getSheetsClient();
+  if (!client) return null;
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_LOGS_SHEET}!A2:H`,
+    });
+    const rows = res.data.values || [];
+    const row = rows.find(r => r[0] === logId);
+    if (!row) return null;
+    return {
+      logId: row[0] || '',
+      senderId: row[1] || '',
+      senderName: row[2] || '',
+      receiverEmail: row[3] || '',
+      officerName: row[4] || '',
+      category: row[5] || '',
+      sentAt: row[6] || '',
+      status: row[7] || '',
+    };
+  } catch (err) {
+    console.error('Error fetching questionnaire log by id:', err.message);
+    return null;
+  }
+}
+
+export async function submitQuestionnaire(sub) {
+  const client = await getSheetsClient();
+  if (!client) return { success: true };
+  try {
+    // Append to Questionnaire_Submissions
+    await client.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A:M`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[
+          sub.submissionId,
+          sub.logId || '',
+          sub.receiverEmail || '',
+          sub.officerName || '',
+          sub.category || '',
+          sub.q1_rating || '',
+          sub.q2_rating || '',
+          sub.q3_rating || '',
+          sub.q4_rating || '',
+          sub.q5_rating || '',
+          sub.answersJson || '',
+          sub.advice || '',
+          sub.submittedAt || new Date().toISOString(),
+        ]],
+      },
+    });
+    // Update log status to 'Submitted'
+    if (sub.logId) {
+      await updateQuestionnaireLogStatus(sub.logId, 'Submitted');
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('Error submitting questionnaire answers:', err.message);
+    throw err;
+  }
+}
+
+export async function getSubmissions(officerName = null, dateFrom = null, dateTo = null) {
+  const client = await getSheetsClient();
+  if (!client) return [];
+  try {
+    const res = await client.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${QUESTIONNAIRE_SUBMISSIONS_SHEET}!A2:M`,
+    });
+    const rows = res.data.values || [];
+    const submissions = rows.map(row => {
+      const ratings = [row[5], row[6], row[7], row[8], row[9]]
+        .map(v => parseFloat(v))
+        .filter(v => !isNaN(v));
+      const avgScore = ratings.length > 0
+        ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)
+        : null;
+      return {
+        submissionId: row[0] || '',
+        logId: row[1] || '',
+        receiverEmail: row[2] || '',
+        officerName: row[3] || '',
+        category: row[4] || '',
+        ratings: {
+          Q1: row[5] || '', Q2: row[6] || '', Q3: row[7] || '',
+          Q4: row[8] || '', Q5: row[9] || '',
+        },
+        answersJson: row[10] || '',
+        advice: row[11] || '',
+        submittedAt: row[12] || '',
+        avgScore,
+      };
+    });
+    
+    // Apply filters
+    let filtered = submissions;
+    
+    if (officerName) {
+      filtered = filtered.filter(s => s.officerName === officerName);
+    }
+    
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(s => {
+        const submissionDate = s.submittedAt ? new Date(s.submittedAt) : null;
+        return submissionDate && submissionDate >= fromDate;
+      });
+    }
+    
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999); // End of day
+      filtered = filtered.filter(s => {
+        const submissionDate = s.submittedAt ? new Date(s.submittedAt) : null;
+        return submissionDate && submissionDate <= toDate;
+      });
+    }
+    
+    return filtered;
+  } catch (err) {
+    console.error('Error fetching submissions:', err.message);
+    return [];
+  }
+}
+

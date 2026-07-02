@@ -199,3 +199,131 @@ export async function removeRelated(faqId, relatedFaqId, userId) {
   });
   return data;
 }
+
+// --- Questionnaires ---
+export async function fetchOfficers() {
+  const data = await request('/officers');
+  if (data) return data;
+  return [];
+}
+
+export async function sendQuestionnaire(payload) {
+  const data = await request('/questionnaires/send', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (data) return data;
+
+  // Mock implementation for offline mode
+  const mockLog = {
+    logId: `qlog-${Date.now()}`,
+    senderId: payload.senderId,
+    senderName: 'Test User',
+    receiverEmail: payload.receiverEmail,
+    officerName: payload.officerName,
+    category: JSON.stringify(payload.selectedQuestions || []),
+    sentAt: new Date().toISOString(),
+    status: 'Sent'
+  };
+
+  const currentLogs = JSON.parse(sessionStorage.getItem('mock_q_logs') || '[]');
+  currentLogs.unshift(mockLog);
+  sessionStorage.setItem('mock_q_logs', JSON.stringify(currentLogs));
+
+  const link = `${window.location.origin}/privy-officer-performance-questionnaire?id=${mockLog.logId}`;
+  console.log('✉️ Mock send success. Link:', link);
+  return { success: true, logId: mockLog.logId, link };
+}
+
+export async function fetchQuestionnaireLogs(senderId) {
+  const data = await request(`/questionnaires/logs?senderId=${senderId}`);
+  if (data) return data;
+
+  // Mock implementation
+  const currentLogs = JSON.parse(sessionStorage.getItem('mock_q_logs') || '[]');
+  return currentLogs.filter(l => l.senderId.toUpperCase() === senderId.toUpperCase());
+}
+
+export async function fetchQuestionnaireDetails(logId) {
+  const data = await request(`/questionnaires/details/${logId}`);
+  if (data) return data;
+
+  // Mock: reconstruct details with inline questions
+  const currentLogs = JSON.parse(sessionStorage.getItem('mock_q_logs') || '[]');
+  const log = currentLogs.find(l => l.logId === logId);
+  if (!log) throw new Error('Questionnaire link not found or expired.');
+
+  const defaultQuestions = [
+    { id: 'Q1', questionText: 'The integration team clearly explained the integration process and technical requirements', order: 1 },
+    { id: 'Q2', questionText: 'The proposed solution met our business and technical needs.', order: 2 },
+    { id: 'Q3', questionText: 'The integration team provided timely and helpful support throughout the integration process.', order: 3 },
+    { id: 'Q4', questionText: 'Communication from the integration team was clear, responsive, and easy to understand.', order: 4 },
+    { id: 'Q5', questionText: 'Overall, we are satisfied with the support and collaboration provided by the integration team during the integration project.', order: 5 },
+  ];
+
+  let questions = defaultQuestions;
+  try {
+    const selectedIds = JSON.parse(log.category);
+    if (Array.isArray(selectedIds)) {
+      questions = defaultQuestions.filter(q => selectedIds.includes(q.id));
+    }
+  } catch { /* use all default questions */ }
+
+  return {
+    logId: log.logId,
+    receiverEmail: log.receiverEmail,
+    officerName: log.officerName,
+    category: 'Privy Integration Officer Performance Questionnaire',
+    questions
+  };
+}
+
+export async function fetchQuestionnaireQuestions(category) {
+  const url = category
+    ? `/questionnaire-templates?category=${encodeURIComponent(category)}`
+    : '/questionnaire-templates';
+  const data = await request(url);
+  if (data) return data;
+
+  return [
+    { id: 'Q1', questionText: 'The integration team clearly explained the integration process and technical requirements', order: 1 },
+    { id: 'Q2', questionText: 'The proposed solution met our business and technical needs.', order: 2 },
+    { id: 'Q3', questionText: 'The integration team provided timely and helpful support throughout the integration process.', order: 3 },
+    { id: 'Q4', questionText: 'Communication from the integration team was clear, responsive, and easy to understand.', order: 4 },
+    { id: 'Q5', questionText: 'Overall, we are satisfied with the support and collaboration provided by the integration team during the integration project.', order: 5 },
+  ];
+}
+
+export async function submitQuestionnaireAnswers(payload) {
+  const data = await request('/questionnaires/submit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (data) return data;
+
+  // Mock implementation
+  const currentLogs = JSON.parse(sessionStorage.getItem('mock_q_logs') || '[]');
+  const logIndex = currentLogs.findIndex(l => l.logId === payload.logId);
+  if (logIndex !== -1) {
+    // Check if already submitted
+    if (currentLogs[logIndex].status === 'Submitted') {
+      throw new Error('This questionnaire has already been submitted. You cannot submit it again.');
+    }
+    currentLogs[logIndex].status = 'Submitted';
+    sessionStorage.setItem('mock_q_logs', JSON.stringify(currentLogs));
+  }
+  return { success: true };
+}
+
+export async function fetchSubmissions(officerName = '', dateFrom = '', dateTo = '') {
+  const params = new URLSearchParams();
+  if (officerName) params.append('officerName', officerName);
+  if (dateFrom) params.append('dateFrom', dateFrom);
+  if (dateTo) params.append('dateTo', dateTo);
+  
+  const url = `/questionnaires/submissions?${params.toString()}`;
+  const data = await request(url);
+  if (data) return data;
+  return [];
+}
+
