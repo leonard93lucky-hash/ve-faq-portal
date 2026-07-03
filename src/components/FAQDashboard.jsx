@@ -14,12 +14,32 @@ const DEFAULT_CATEGORIES = [
   'Technical Details',
 ];
 
+const CATEGORY_NORMALIZE_MAP = {
+  'liveness web': 'Liveness Web',
+  'as is & digitalid': 'AS IS & Digital-ID',
+  'user-verif avengers': 'User Verification',
+};
+
+const normalizeCategory = (cat) => {
+  if (!cat) return cat;
+  const lower = cat.toLowerCase().trim();
+  return CATEGORY_NORMALIZE_MAP[lower] || cat;
+};
+
 const CATEGORY_COLORS = {
   'General': 'cat-general',
   'Policies & Compliance': 'cat-policies',
   'Digital-ID': 'cat-digital',
+  'AS IS & Digital-ID': 'cat-digital',
   'Liveness SDK': 'cat-liveness',
+  'Liveness API': 'cat-liveness',
+  'Liveness Web': 'cat-liveness',
+  'RASP Liveness': 'cat-liveness',
   'Technical Details': 'cat-technical',
+  'Watchlist': 'cat-watchlist',
+  'OCR': 'cat-ocr',
+  'Network': 'cat-network',
+  'User Verification': 'cat-general',
 };
 
 export default function FAQDashboard({
@@ -96,7 +116,7 @@ export default function FAQDashboard({
         faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (faq.merchant && faq.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (faq.reporter && faq.reporter.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesCategory = activeCategory === 'All' || faq.category === activeCategory;
+      const matchesCategory = activeCategory === 'All' || normalizeCategory(faq.category) === activeCategory;
       const matchesContributor = activeContributor === 'All' || (faq.reporter && faq.reporter.trim() === activeContributor);
       const matchesLowRated = !showLowRated || lowRatedFaqIds.has(faq.id);
       return matchesSearch && matchesCategory && matchesContributor && matchesLowRated;
@@ -307,7 +327,7 @@ export default function FAQDashboard({
       <div className="toolbar">
         <div className="category-filters">
           <FiFilter className="filter-icon" />
-          {['All', ...categories].map(cat => (
+          {['All', ...categories.map(normalizeCategory).filter((v, i, a) => a.indexOf(v) === i)].map(cat => (
             <button
               key={cat}
               className={`category-chip ${activeCategory === cat ? 'active' : ''} ${cat !== 'All' ? (CATEGORY_COLORS[cat] || 'cat-general') : ''}`}
@@ -403,8 +423,8 @@ export default function FAQDashboard({
               >
                 <div className="faq-question" onClick={() => toggleFaq(faq.id)}>
                   <div className="faq-question-left">
-                    <span className={`category-badge ${CATEGORY_COLORS[faq.category] || ''}`}>
-                      {faq.category}
+                    <span className="category-badge">
+                      {normalizeCategory(faq.category)}
                     </span>
                     <span className="faq-question-text">{faq.question}</span>
                   </div>
@@ -482,7 +502,7 @@ export default function FAQDashboard({
                                   onClick={(e) => { e.stopPropagation(); handleScrollToFaq(rf.id); }}
                                   title={rf.note ? `Note: ${rf.note}` : rf.question}
                                 >
-                                  <span className={`category-badge-xs ${CATEGORY_COLORS[rf.category] || ''}`}>{rf.category}</span>
+                                  <span className="category-badge-xs">{normalizeCategory(rf.category)}</span>
                                   <span className="related-chip-text">{rf.question.length > 60 ? rf.question.slice(0, 60) + '…' : rf.question}</span>
                                 </button>
                                 <button
@@ -522,7 +542,7 @@ export default function FAQDashboard({
                                     setRelatedSearch('');
                                   }}
                                 >
-                                  <span className={`category-badge-xs ${CATEGORY_COLORS[candidate.category] || ''}`}>{candidate.category}</span>
+                                  <span className="category-badge-xs">{normalizeCategory(candidate.category)}</span>
                                   <span>{candidate.question.length > 70 ? candidate.question.slice(0, 70) + '…' : candidate.question}</span>
                                 </button>
                               ))

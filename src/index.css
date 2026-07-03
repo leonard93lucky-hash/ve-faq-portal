@@ -21,6 +21,9 @@
   --cat-digital: #1F2937;
   --cat-liveness: #374151;
   --cat-technical: #4B5563;
+  --cat-watchlist: #D97706;
+  --cat-ocr: #7C3AED;
+  --cat-network: #0891B2;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -256,6 +259,9 @@ textarea.input-field { resize: vertical; min-height: 100px; line-height: 1.6; }
 .category-chip.active.cat-digital { background: var(--cat-digital); }
 .category-chip.active.cat-liveness { background: var(--cat-liveness); }
 .category-chip.active.cat-technical { background: var(--cat-technical); }
+.category-chip.active.cat-watchlist { background: var(--cat-watchlist); }
+.category-chip.active.cat-ocr { background: var(--cat-ocr); }
+.category-chip.active.cat-network { background: var(--cat-network); }
 .category-chip.active:not([class*="cat-"]) { background: var(--primary); }
 
 .results-info { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; color: var(--text-dim); font-size: 0.85rem; }
@@ -279,12 +285,8 @@ textarea.input-field { resize: vertical; min-height: 100px; line-height: 1.6; }
 .category-badge {
   padding: 0.2rem 0.6rem; border-radius: 0.3rem; font-size: 0.7rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; flex-shrink: 0;
+  background: rgba(107, 114, 128, 0.08); color: var(--text-muted); border: 1px solid rgba(107, 114, 128, 0.12);
 }
-.category-badge.cat-general { background: rgba(107, 114, 128, 0.1); color: #6B7280; }
-.category-badge.cat-policies { background: rgba(227, 30, 36, 0.1); color: #E31E24; }
-.category-badge.cat-digital { background: rgba(31, 41, 55, 0.1); color: #1F2937; }
-.category-badge.cat-liveness { background: rgba(55, 65, 81, 0.1); color: #374151; }
-.category-badge.cat-technical { background: rgba(75, 85, 99, 0.1); color: #4B5563; }
 
 .faq-answer {
   max-height: 0; opacity: 0; overflow: hidden; transition: all 0.35s ease;
