@@ -93,11 +93,11 @@ export default function ClientQuestionnaire() {
   };
 
   const ratingOptions = [
-    { label: 'Strongly Agree', value: '5' },
-    { label: 'Agree', value: '4' },
-    { label: 'Neutral', value: '3' },
+    { label: 'Strongly Disagree', value: '1' },
     { label: 'Disagree', value: '2' },
-    { label: 'Strongly Disagree', value: '1' }
+    { label: 'Neutral', value: '3' },
+    { label: 'Agree', value: '4' },
+    { label: 'Strongly Agree', value: '5' }
   ];
 
   if (loading) {
